@@ -1,5 +1,6 @@
 const { InlineKeyboard } = require('grammy');
 const { isAdmin } = require('../db/db');
+const config = require('../config');
 
 module.exports = (bot) => {
     bot.command('help', async (ctx) => {
@@ -26,7 +27,7 @@ module.exports = (bot) => {
 
         const supportInfo = `\n💡 *Support*
 • Format numbers as: +1234567890
-• Contact: @${process.env.ADMIN_TELEGRAM_USERNAME}
+• Contact: @${config.admin.username} for help
 • Version: 1.0.0`;
 
         const kb = new InlineKeyboard()
@@ -74,7 +75,7 @@ module.exports = (bot) => {
 • Monitor call progress
 
 *Need Help?*
-Contact admin: @${process.env.ADMIN_TELEGRAM_USERNAME}`;
+Contact admin: @${config.admin.username}`;
 
         await ctx.reply(helpText, {
             parse_mode: 'Markdown'

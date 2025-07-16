@@ -10,7 +10,7 @@ const { Auth } = require('@vonage/auth');
 const { Vonage } = require('@vonage/server-sdk');
 const { streamTTS } = require('./tts/elevenlabs');
 const { togetherAIResponse } = require('./ai/together');
-const { logCall, getCall } = require('./db/logger');
+const { logCall, getCall } = require('./db/db');
 const { registerStatusHandlers } = require('./status');
 
 const app = express();

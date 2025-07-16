@@ -1,5 +1,16 @@
 require('dotenv').config({debug: true});
 
+const required = [
+  'ADMIN_TELEGRAM_ID', 'ADMIN_TELEGRAM_USERNAME', 'API_BASE', 'APP_ID', 'BOT_TOKEN'
+];
+
+for (const key of required) {
+  if (!process.env[key]) {
+    console.error(`❌ Missing environment variable: ${key}`);
+    process.exit(1);
+  }
+}
+
 module.exports = {
   admin: {
     userId: process.env.ADMIN_TELEGRAM_ID,
