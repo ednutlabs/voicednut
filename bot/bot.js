@@ -69,7 +69,7 @@ bot.command('start', async (ctx) => {
         let user = await new Promise(r => getUser(ctx.from.id, r));
         if (!user) {
             const kb = new InlineKeyboard()
-                .text('📱 Contact Admin', `https://t.me/${process.env.ADMIN_TELEGRAM_USERNAME}`);
+                .text('📱 Contact Admin', `https://t.me/@${config.admin.username}`);
             
             return ctx.reply('*Access Restricted* ⚠️\n\n' +
                 'This bot requires authorization.\n' +

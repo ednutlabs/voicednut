@@ -1,4 +1,5 @@
 const { InlineKeyboard } = require('grammy');
+const config = require('../config');
 
 module.exports = (bot) => {
     bot.command('guide', async (ctx) => {
@@ -30,7 +31,7 @@ module.exports = (bot) => {
 • Use /status to check bot health
 
 *Need Help?*
-Contact: @${process.env.ADMIN_TELEGRAM_USERNAME}
+Contact: @${config.admin.username} for support.
 Version: 1.0.0`;
 
         const kb = new InlineKeyboard()

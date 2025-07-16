@@ -44,6 +44,8 @@ bot/db/data.db
 node_modules/
 jspm_packages/
 
+api/node_modules/
+api/package-lock.json
 # Snowpack dependency directory (https://snowpack.dev/)
 web_modules/
 

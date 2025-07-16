@@ -1,5 +1,6 @@
+const config = require('../config');
 const { getUser } = require('../db/db');
-const fetch = require('node-fetch');
+const axios = require('axios');
 
 async function callFlow(conversation, ctx) {
     try {
@@ -35,22 +36,24 @@ async function callFlow(conversation, ctx) {
         }
         const first = firstMsg.message.text;
 
-        const res = await fetch(`${process.env.API_BASE}/outbound-call`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                number,
-                prompt,
-                first_message: first,
-                user_chat_id: ctx.from.id
-            })
-        });
-        
-        const data = await res.json();
-        await ctx.reply(res.ok ? 
-            `✅ Call initiated! UUID: ${data.call_uuid}` : 
-            `❌ Error: ${data.message || 'Unknown error'}`
-        );
+        try {
+            const response = await axios({
+                method: 'POST',
+                url: `${config.apiUrl}/outbound-call`,
+                headers: { 'Content-Type': 'application/json' },
+                data: {
+                    number,
+                    prompt,
+                    first_message: first,
+                    user_chat_id: ctx.from.id
+                }
+            });
+
+            await ctx.reply(`✅ Call initiated! UUID: ${response.data.call_uuid}`);
+        } catch (apiError) {
+            console.error('API Error:', apiError.response?.data || apiError.message);
+            await ctx.reply(`❌ Error: ${apiError.response?.data?.message || 'Failed to initiate call'}`);
+        }
 
     } catch (error) {
         console.error('Call flow error:', error);
