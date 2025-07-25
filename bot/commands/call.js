@@ -49,11 +49,28 @@ async function callFlow(conversation, ctx) {
                 }
             });
 
-            await ctx.reply(`✅ Call initiated! UUID: ${response.data.call_uuid}`);
-        } catch (apiError) {
-            console.error('API Error:', apiError.response?.data || apiError.message);
-            await ctx.reply(`❌ Error: ${apiError.response?.data?.message || 'Failed to initiate call'}`);
-        }
+                   // Step 1: Confirmation message of call request details
+        await ctx.reply(
+          `📲 Phone: ${number}\n🏦 Prompt: ${prompt}\n📇 Message: ${first || 'N/A'}`
+        );
+
+        // Step 2 & 3: Delayed simulated progression of call status
+        const chatId = ctx.chat.id;
+
+        // Delay to simulate calling phase (isolated per chat session)
+        setTimeout(() => {
+          ctx.api.sendMessage(chatId, '*✅ Calling...*', { parse_mode: 'Markdown' });
+        }, 1000);
+
+        // Further delay to simulate ringing phase
+        setTimeout(() => {
+          ctx.api.sendMessage(chatId, '*☎️ Ringing...*', { parse_mode: 'Markdown' });
+        }, 2000);
+      } catch (err) {
+        // Catch network/API issues and notify
+        console.error('❌ API call error:', err.message);
+        await ctx.reply('⚠️ Failed to send call request. Please check the service or API.');
+      } 
 
     } catch (error) {
         console.error('Call flow error:', error);
