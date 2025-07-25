@@ -1,32 +1,30 @@
-/**
- * Import required dependencies
- */
+// api/api.js
+
 const Fastify = require('fastify');
+const formBody = require('@fastify/formbody');
+const websocket = require('@fastify/websocket');
+const dotenv = require('dotenv');
 const config = require('./config');
-const statusHandler = require('./routes/status');
-const inboundHandler = require('./routes/inbound');
-const outboundHandler = require('./routes/outbound');
 
-const fastify = Fastify();
+// Load .env
+dotenv.config();
 
-// Register plugins
-fastify.register(require('@fastify/formbody'));
-fastify.register(require('@fastify/websocket'));
+// Create server
+const fastify = Fastify({ logger: true });
+fastify.register(formBody);
+fastify.register(websocket);
 
 // Register routes
-fastify.post('/api/status/:call_uuid', statusHandler);
-fastify.register(inboundHandler, { prefix: '/api' });
-fastify.register(outboundHandler, { prefix: '/api' });
+fastify.register(require('./routes/inbound'));
+fastify.register(require('./routes/outbound'));
+fastify.register(require('./routes/status'));
 
 // Start server
-const start = async () => {
-    try {
-        await fastify.listen({ port: config.server.port });
-        console.log(`[Server] API listening on port ${config.server.port}`);
-    } catch (err) {
-        console.error('Error starting server:', err);
-        process.exit(1);
-    }
-};
-
-start();
+const PORT = config.port || 1337;
+fastify.listen({ port: PORT, host: '0.0.0.0' }, (err, address) => {
+  if (err) {
+    fastify.log.error(err);
+    process.exit(1);
+  }
+  fastify.log.info(`🚀 Server listening at ${address}`);
+});
