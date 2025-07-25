@@ -72,6 +72,8 @@ web_modules/
 
 # dotenv environment variable files
 .env
+bot/.env
+api/.env
 .env.*
 !.env.example
 
