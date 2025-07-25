@@ -1,161 +1,168 @@
-/**
- * Import required dependencies
- */
+// routes/outbound.js (CommonJS version, no external ElevenLabs file)
+
 const WebSocket = require('ws');
-const { v4: uuidv4 } = require('uuid');
-const { logCall, updateCallStatus, getCall } = require('../db/db');
+const Twilio = require('twilio');
 const config = require('../config');
 
-// Initialize Twilio client
-const twilioClient = require('twilio')(
+const twilioClient = Twilio(
   config.twilio.accountSid,
   config.twilio.authToken
 );
 
-/**
- * Helper function to get signed URL
- */
-async function getSignedUrl() {
-  try {
-    const response = await fetch(
-      `https://api.elevenlabs.io/v1/convai/conversation/get_signed_url?agent_id=${config.elevenlabs.agentId}`,
-      {
-        method: 'GET',
-        headers: {
-          'xi-api-key': config.elevenlabs.apiKey,
-        },
-      }
-    );
-
-    if (!response.ok) {
-      throw new Error(`Failed to get signed URL: ${response.statusText}`);
-    }
-
-    const data = await response.json();
-    return data.signed_url;
-  } catch (error) {
-    console.error('Error getting signed URL:', error);
-    throw error;
-  }
-}
-
-/**
- * Outbound call handler setup
- */
 function outboundHandler(fastify, options, done) {
-  // Route to initiate outbound calls
   fastify.post('/outbound-call', async (request, reply) => {
-    const { number, prompt, first_message, user_chat_id } = request.body;
+    const { number, prompt, first_message } = request.body;
 
-    if (!number) {
-      return reply.code(400).send({ error: 'Phone number is required' });
-    }
+    if (!number) return reply.code(400).send({ error: 'Phone number is required' });
 
     try {
-      const call_uuid = uuidv4();
-
-      await logCall({
-        call_uuid,
-        phone_number: number,
-        prompt,
-        first_message,
-        user_chat_id
-      });
-
       const call = await twilioClient.calls.create({
         from: config.twilio.phoneNumber,
         to: number,
-        url: `https://${request.headers.host}/api/outbound-call-twiml?call_uuid=${call_uuid}`
+        url: `https://${request.headers.host}/outbound-call-twiml?prompt=${encodeURIComponent(prompt)}&first_message=${encodeURIComponent(first_message)}`
       });
-
-      await updateCallStatus(call_uuid, 'initiated', call.sid);
 
       reply.send({
         success: true,
         message: 'Call initiated',
-        call_uuid,
-        call_sid: call.sid
+        callSid: call.sid
       });
     } catch (error) {
       console.error('Error initiating outbound call:', error);
-      reply.code(500).send({
-        success: false,
-        error: 'Failed to initiate call'
-      });
+      reply.code(500).send({ error: 'Failed to initiate call' });
     }
   });
 
-  // TwiML route for outbound calls
   fastify.all('/outbound-call-twiml', async (request, reply) => {
-    const call_uuid = request.query.call_uuid;
-    
-    try {
-      const call = await getCall(call_uuid);
-      if (!call) {
-        throw new Error('Call not found');
-      }
+    const prompt = request.query.prompt || '';
+    const first_message = request.query.first_message || '';
 
-      const twimlResponse = `<?xml version="1.0" encoding="UTF-8"?>
-        <Response>
-          <Connect>
-            <Stream url="wss://${request.headers.host}/outbound-media-stream">
-              <Parameter name="call_uuid" value="${call_uuid}" />
-              <Parameter name="prompt" value="${call.prompt}" />
-              <Parameter name="first_message" value="${call.first_message}" />
-            </Stream>
-          </Connect>
-        </Response>`;
+    const twiml = `<?xml version="1.0" encoding="UTF-8"?>
+      <Response>
+        <Connect>
+          <Stream url="wss://${request.headers.host}/outbound-media-stream">
+            <Parameter name="prompt" value="${prompt}" />
+            <Parameter name="first_message" value="${first_message}" />
+          </Stream>
+        </Connect>
+      </Response>`;
 
-      reply.type('text/xml').send(twimlResponse);
-    } catch (error) {
-      console.error('Error generating TwiML:', error);
-      reply.code(500).send('Error generating call response');
-    }
+    reply.type('text/xml').send(twiml);
   });
 
-  // WebSocket handler for outbound media streams
-  fastify.register(async (fastifyInstance) => {
+  fastify.register(async function (fastifyInstance) {
     fastifyInstance.get('/outbound-media-stream', { websocket: true }, (ws, req) => {
-      console.info('[Server] Connected to outbound media stream');
-
       let streamSid = null;
       let callSid = null;
-      let elevenLabsWs = null;
-      let call_uuid = null;
+      let elevenWs = null;
+      let customParams = null;
 
-      const setupElevenLabs = async (customParameters) => {
+      async function getSignedUrl() {
+        const https = require('https');
+
+        return new Promise((resolve, reject) => {
+          const options = {
+            hostname: 'api.elevenlabs.io',
+            path: `/v1/convai/conversation/get_signed_url?agent_id=${config.elevenlabs.agentId}`,
+            method: 'GET',
+            headers: {
+              'xi-api-key': config.elevenlabs.apiKey
+            }
+          };
+
+          const req = https.request(options, res => {
+            let data = '';
+            res.on('data', chunk => data += chunk);
+            res.on('end', () => {
+              try {
+                const json = JSON.parse(data);
+                resolve(json.signed_url);
+              } catch (err) {
+                reject(err);
+              }
+            });
+          });
+
+          req.on('error', reject);
+          req.end();
+        });
+      }
+
+      const setupEleven = async () => {
         try {
           const signedUrl = await getSignedUrl();
-          elevenLabsWs = new WebSocket(signedUrl);
+          elevenWs = new WebSocket(signedUrl);
 
-          elevenLabsWs.on('open', () => {
-            console.log('[ElevenLabs] Connected to Conversational AI');
-            
-            const initialConfig = {
+          elevenWs.on('open', () => {
+            const init = {
               type: 'conversation_initiation_client_data',
               conversation_config_override: {
                 agent: {
-                  prompt: {
-                    prompt: customParameters?.prompt || 'Default prompt'
-                  },
-                  first_message: customParameters?.first_message || 'Hello, how can I help you?'
+                  prompt: { prompt: customParams?.prompt || 'You are a helpful agent.' },
+                  first_message: customParams?.first_message || 'Hello, how can I help you?'
                 }
               }
             };
-
-            elevenLabsWs.send(JSON.stringify(initialConfig));
+            elevenWs.send(JSON.stringify(init));
           });
 
-          elevenLabsWs.on('message', handleElevenLabsMessage.bind(null, ws, streamSid, call_uuid));
-          elevenLabsWs.on('close', handleElevenLabsClose.bind(null, call_uuid));
+          elevenWs.on('message', data => {
+            try {
+              const msg = JSON.parse(data);
+              if (msg.audio?.chunk) {
+                ws.send(JSON.stringify({ event: 'media', streamSid, media: { payload: msg.audio.chunk } }));
+              }
+              if (msg.audio_event?.audio_base_64) {
+                ws.send(JSON.stringify({ event: 'media', streamSid, media: { payload: msg.audio_event.audio_base_64 } }));
+              }
+              if (msg.type === 'interruption') {
+                ws.send(JSON.stringify({ event: 'clear', streamSid }));
+              }
+              if (msg.type === 'ping') {
+                elevenWs.send(JSON.stringify({ type: 'pong', event_id: msg.ping_event?.event_id }));
+              }
+            } catch (err) {
+              console.error('[ElevenLabs] Invalid JSON:', err);
+            }
+          });
 
-        } catch (error) {
-          console.error('[ElevenLabs] Setup error:', error);
+          elevenWs.on('close', () => console.log('[ElevenLabs] Closed'));
+          elevenWs.on('error', err => console.error('[ElevenLabs] Error:', err));
+
+        } catch (err) {
+          console.error('[Eleven Setup Failed]', err);
+          ws.close();
         }
       };
 
-      ws.on('message', handleTwilioMessage.bind(null, ws, elevenLabsWs, setupElevenLabs));
-      ws.on('close', handleWebSocketClose.bind(null, call_uuid, elevenLabsWs));
+      setupEleven();
+
+      ws.on('message', message => {
+        try {
+          const data = JSON.parse(message);
+          switch (data.event) {
+            case 'start':
+              streamSid = data.start.streamSid;
+              callSid = data.start.callSid;
+              customParams = data.start.customParameters;
+              break;
+            case 'media':
+              if (elevenWs?.readyState === WebSocket.OPEN) {
+                elevenWs.send(JSON.stringify({ user_audio_chunk: Buffer.from(data.media.payload, 'base64').toString('base64') }));
+              }
+              break;
+            case 'stop':
+              if (elevenWs?.readyState === WebSocket.OPEN) elevenWs.close();
+              break;
+          }
+        } catch (e) {
+          console.error('[Twilio WS Error]', e);
+        }
+      });
+
+      ws.on('close', () => {
+        if (elevenWs?.readyState === WebSocket.OPEN) elevenWs.close();
+      });
     });
   });
 

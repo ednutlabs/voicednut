@@ -1,7 +1,7 @@
 require('dotenv').config({debug: true});
 
 const required = [
-  'ADMIN_TELEGRAM_ID', 'ADMIN_TELEGRAM_USERNAME', 'API_BASE', 'APP_ID', 'BOT_TOKEN'
+  'ADMIN_TELEGRAM_ID', 'ADMIN_TELEGRAM_USERNAME', 'API_BASE', 'BOT_TOKEN'
 ];
 
 for (const key of required) {
