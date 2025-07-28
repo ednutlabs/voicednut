@@ -1,5 +1,6 @@
+// bot/commands/call.js
+
 const config = require('../config');
-const { getUser } = require('../db/db');
 const axios = require('axios');
 
 async function callFlow(conversation, ctx) {
@@ -28,50 +29,42 @@ async function callFlow(conversation, ctx) {
             return ctx.reply('❌ Please send a valid message.');
         }
 
-        const user_chat_id = ctx.from.id;
-
-        // Send call request to API
-        const apiResponse = await axios.post(`${config.apiUrl}/outbound-call`, {
+        const payload = {
             number,
             prompt,
             first_message: first,
-            user_chat_id
-        });
+            user_chat_id: ctx.from.id
+        };
 
-        const { data } = apiResponse;
+        // Confirm payload to user
+        await ctx.reply(`*📤 Calling...*\n\n• Number: ${number}\n• Prompt: ${prompt}\n• First Message: ${first}`);
 
-        if (!data?.callSid) {
-            throw new Error('CallSid missing in API response');
+        // Send call to API
+        const response = await axios.post(`${config.apiUrl}/outbound-call`, payload);
+
+        if (!response.data?.callSid) {
+            console.error('Missing callSid in response:', response.data);
+            return ctx.reply('❌ Call initiation failed. No callSid returned.');
         }
 
-        await ctx.reply(`📲 Calling initiated!\n\n• Phone: ${number}\n• Prompt: ${prompt}\n• Message: ${first || 'N/A'}`);
+        await ctx.reply(`*☎️ Ringing...*: \`${response.data.callSid}\``, {
+            parse_mode: 'Markdown'
+        });
+        
 
-        const chatId = ctx.chat.id;
-
-        setTimeout(() => {
-            ctx.api.sendMessage(chatId, '*✅ Calling...*', { parse_mode: 'Markdown' });
-        }, 1000);
-
-        setTimeout(() => {
-            ctx.api.sendMessage(chatId, '*☎️ Ringing...*', { parse_mode: 'Markdown' });
-        }, 2000);
-    } catch (error) {
-        console.error('Call flow error:', error);
-        await ctx.reply('❌ Something went wrong. Try again or contact support.');
+    } catch (err) {
+        console.error('Call flow error:', err?.response?.data || err.message);
+        await ctx.reply('❌ Call request failed. Check API or network.');
     }
 }
 
 function registerCallCommand(bot) {
     bot.command('call', async (ctx) => {
         try {
-            const user = await new Promise(r => getUser(ctx.from.id, r));
-            if (!user) {
-                return ctx.reply('❌ You are not authorized.');
-            }
             await ctx.conversation.enter("call-conversation");
         } catch (error) {
             console.error('Call command error:', error);
-            await ctx.reply('❌ An error occurred. Please try again.');
+            await ctx.reply('❌ Failed to initiate call conversation.');
         }
     });
 }

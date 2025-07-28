@@ -31,5 +31,13 @@ module.exports = {
     },
     bot: {
         token: process.env.BOT_TOKEN
-    }
+    },
+    webhook: {
+        secret: process.env.WEBHOOK_SECRET
+    },
+    server: {
+        port: process.env.PORT
+    },
+
+    setupdone: process.env.SETUPDONE || 'false'
 };
