@@ -1,8 +1,15 @@
-//require('dotenv').config();
-require('dotenv').config({ path: __dirname + '/.env' });
+'use strict';
+
+/*
+ * Configuration for the Telegram bot
+ */
+
+require('dotenv').config();
 const required = [
   'ADMIN_TELEGRAM_ID', 'ADMIN_TELEGRAM_USERNAME', 'API_BASE', 'BOT_TOKEN'
 ];
+
+// Check for required environment variables
 
 for (const key of required) {
   if (!process.env[key]) {
@@ -10,6 +17,8 @@ for (const key of required) {
     process.exit(1);
   }
 }
+
+// Check for required environment variables
 
 module.exports = {
   admin: {

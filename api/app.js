@@ -3,27 +3,33 @@ require('colors');
 
 const express = require('express');
 const ExpressWs = require('express-ws');
+const twilio = require('twilio');
+const validateTwilioRequest = require('./middleware/twilioSignature')();
 
-const { GptService } = require('./services/gpt-service');
-const { StreamService } = require('./services/stream-service');
-const { TranscriptionService } = require('./services/transcription-service');
-const { TextToSpeechService } = require('./services/tts-service');
-const { recordingService } = require('./services/recording-service');
+const { GptService } = require('./routes/gpt');
+const { StreamService } = require('./routes/stream');
+const { TranscriptionService } = require('./routes/transcription');
+const { TextToSpeechService } = require('./routes/tts');
+const { recordingService } = require('./routes/recording');
 
 const VoiceResponse = require('twilio').twiml.VoiceResponse;
 
 const app = express();
 ExpressWs(app);
 
-// Add JSON parsing middleware
+// Add JSON and URL-encoded parsing middleware (Twilio sends form-encoded webhooks)
 app.use(express.json());
+app.use(express.urlencoded({ extended: false }));
+
+// Twilio request validation middleware. If TWILIO_AUTH_TOKEN is not set we skip validation
+// validateTwilioRequest is provided by ./middleware/twilioSignature
 
 const PORT = process.env.PORT || 3000;
 
 // Store call configurations for dynamic agent setup
 const callConfigurations = new Map();
 
-app.post('/incoming', (req, res) => {
+app.post('/incoming', validateTwilioRequest, (req, res) => {
   try {
     const response = new VoiceResponse();
     const connect = response.connect();
@@ -242,6 +248,19 @@ app.ws('/connection', (ws) => {
 });
 
 // Health check endpoint
+// Twilio status callback endpoint (recommended to be validated by Twilio signature)
+app.post('/status', validateTwilioRequest, (req, res) => {
+  // Persist or log Twilio status updates (CallSid, CallStatus etc.)
+  try {
+    console.log('Twilio status callback received:', req.body);
+    // Minimal response for Twilio
+    res.status(200).send('OK');
+  } catch (err) {
+    console.error('Error handling status callback', err);
+    res.status(500).send('Server error');
+  }
+});
+
 app.get('/health', (req, res) => {
   res.json({ 
     status: 'healthy', 
