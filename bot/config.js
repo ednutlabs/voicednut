@@ -1,5 +1,5 @@
-require('dotenv').config({debug: true});
-
+//require('dotenv').config();
+require('dotenv').config({ path: __dirname + '/.env' });
 const required = [
   'ADMIN_TELEGRAM_ID', 'ADMIN_TELEGRAM_USERNAME', 'API_BASE', 'BOT_TOKEN'
 ];
