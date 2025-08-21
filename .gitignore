@@ -9,8 +9,6 @@ lerna-debug.log*
 # Diagnostic reports (https://nodejs.org/api/report.html)
 report.[0-9]*.[0-9]*.[0-9]*.[0-9]*.json
 
-api/api.env
-bot/bot.env
 # Runtime data
 pids
 *.pid
@@ -146,4 +144,3 @@ dist
 # Vite logs files
 vite.config.js.timestamp-*
 vite.config.ts.timestamp-*
-api/api.env
