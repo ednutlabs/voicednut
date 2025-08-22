@@ -3,31 +3,59 @@ require('colors');
 
 const express = require('express');
 const ExpressWs = require('express-ws');
-const twilio = require('twilio');
-const validateTwilioRequest = require('./middleware/twilioSignature')();
 
 const { GptService } = require('./routes/gpt');
 const { StreamService } = require('./routes/stream');
 const { TranscriptionService } = require('./routes/transcription');
 const { TextToSpeechService } = require('./routes/tts');
 const { recordingService } = require('./routes/recording');
+const Database = require('./db/db');
+const { webhookService } = require('./routes/status');
+const validateTwilioRequest = require('./middleware/twilioSignature');
 
 const VoiceResponse = require('twilio').twiml.VoiceResponse;
 
 const app = express();
 ExpressWs(app);
 
-// Add JSON and URL-encoded parsing middleware (Twilio sends form-encoded webhooks)
+// Add JSON parsing middleware
 app.use(express.json());
-app.use(express.urlencoded({ extended: false }));
-
-// Twilio request validation middleware. If TWILIO_AUTH_TOKEN is not set we skip validation
-// validateTwilioRequest is provided by ./middleware/twilioSignature
+app.use(express.urlencoded({ extended: true }));
 
 const PORT = process.env.PORT || 3000;
 
+// Initialize database and start services
+let db;
+
+async function startServer() {
+  try {
+    // Initialize database first
+    console.log('Initializing database...'.yellow);
+    db = new Database();
+    await db.initialize();
+    console.log('✅ Database initialized successfully'.green);
+
+    // Start webhook service after database is ready
+    console.log('Starting webhook service...'.yellow);
+    webhookService.start(db);
+    console.log('✅ Webhook service started'.green);
+
+    // Start the server
+    app.listen(PORT);
+    console.log(`✅ API server running on port ${PORT}`.green);
+    console.log(`✅ System ready - Database and webhooks active`.green);
+
+  } catch (error) {
+    console.error('❌ Failed to start server:', error);
+    process.exit(1);
+  }
+}
+
 // Store call configurations for dynamic agent setup
 const callConfigurations = new Map();
+
+// Store active call sessions for database updates
+const activeCalls = new Map();
 
 app.post('/incoming', validateTwilioRequest, (req, res) => {
   try {
@@ -42,10 +70,10 @@ app.post('/incoming', validateTwilioRequest, (req, res) => {
   }
 });
 
-// New outbound call endpoint
+// Enhanced outbound call endpoint with database logging
 app.post('/outbound-call', async (req, res) => {
   try {
-    const { number, prompt, first_message } = req.body;
+    const { number, prompt, first_message, user_chat_id } = req.body;
 
     // Validate required fields
     if (!number || !prompt || !first_message) {
@@ -80,13 +108,34 @@ app.post('/outbound-call', async (req, res) => {
     });
 
     // Store the configuration for this call
-    callConfigurations.set(call.sid, {
+    const callConfig = {
       prompt: prompt,
       first_message: first_message,
       created_at: new Date().toISOString()
-    });
+    };
+    
+    callConfigurations.set(call.sid, callConfig);
 
-    console.log(`Outbound call created: ${call.sid} to ${number}`.green);
+    // Save call to database
+    try {
+      await db.createCall({
+        call_sid: call.sid,
+        phone_number: number,
+        prompt: prompt,
+        first_message: first_message,
+        user_chat_id: user_chat_id
+      });
+
+      // Create initial webhook notification if user_chat_id is provided
+      if (user_chat_id) {
+        await db.createWebhookNotification(call.sid, 'call_initiated', user_chat_id);
+      }
+
+      console.log(`Outbound call created and saved: ${call.sid} to ${number}`.green);
+    } catch (dbError) {
+      console.error('Database error:', dbError);
+      // Continue with call even if database fails
+    }
 
     res.json({
       success: true,
@@ -104,7 +153,7 @@ app.post('/outbound-call', async (req, res) => {
   }
 });
 
-// Enhanced WebSocket connection handler
+// Enhanced WebSocket connection handler with database integration
 app.ws('/connection', (ws) => {
   try {
     ws.on('error', console.error);
@@ -112,6 +161,7 @@ app.ws('/connection', (ws) => {
     let streamSid;
     let callSid;
     let callConfig = null;
+    let callStartTime = null;
 
     let gptService;
     const streamService = new StreamService(ws);
@@ -122,13 +172,27 @@ app.ws('/connection', (ws) => {
     let interactionCount = 0;
   
     // Incoming from MediaStream
-    ws.on('message', function message(data) {
+    ws.on('message', async function message(data) {
       const msg = JSON.parse(data);
       if (msg.event === 'start') {
         streamSid = msg.start.streamSid;
         callSid = msg.start.callSid;
+        callStartTime = new Date();
         
         streamService.setStreamSid(streamSid);
+
+        // Update call status to 'started' in database
+        try {
+          await db.updateCallStatus(callSid, 'started', {
+            started_at: callStartTime.toISOString()
+          });
+          await db.updateCallState(callSid, 'stream_started', {
+            stream_sid: streamSid,
+            start_time: callStartTime.toISOString()
+          });
+        } catch (dbError) {
+          console.error('Database error on call start:', dbError);
+        }
 
         // Check if this is a configured outbound call
         callConfig = callConfigurations.get(callSid);
@@ -145,14 +209,34 @@ app.ws('/connection', (ws) => {
         
         gptService.setCallSid(callSid);
 
+        // Store active call session
+        activeCalls.set(callSid, {
+          startTime: callStartTime,
+          transcripts: [],
+          gptService,
+          callConfig
+        });
+
         // Set RECORDING_ENABLED='true' in .env to record calls
-        recordingService(ttsService, callSid).then(() => {
+        recordingService(ttsService, callSid).then(async () => {
           console.log(`Twilio -> Starting Media Stream for ${streamSid}`.underline.red);
           
           // Use custom first message if available, otherwise use default
           const firstMessage = callConfig ? 
             callConfig.first_message : 
             'Hello! I understand you\'re looking for a pair of AirPods, is that correct?';
+          
+          // Log first AI message
+          try {
+            await db.addTranscript({
+              call_sid: callSid,
+              speaker: 'ai',
+              message: firstMessage,
+              interaction_count: 0
+            });
+          } catch (dbError) {
+            console.error('Database error adding AI transcript:', dbError);
+          }
           
           ttsService.generate({
             partialResponseIndex: null, 
@@ -176,7 +260,12 @@ app.ws('/connection', (ws) => {
         marks = marks.filter(m => m !== msg.mark.name);
       } else if (msg.event === 'stop') {
         console.log(`Twilio -> Media stream ${streamSid} ended.`.underline.red);
-        // Clean up call configuration when call ends
+        
+        // Handle call end and generate summary
+        await handleCallEnd(callSid, callStartTime);
+        
+        // Clean up
+        activeCalls.delete(callSid);
         if (callSid && callConfigurations.has(callSid)) {
           callConfigurations.delete(callSid);
           console.log(`Cleaned up configuration for call: ${callSid}`.yellow);
@@ -199,14 +288,53 @@ app.ws('/connection', (ws) => {
   
     transcriptionService.on('transcription', async (text) => {
       if (!text || !gptService) { return; }
+      
       console.log(`Interaction ${interactionCount} – STT -> GPT: ${text}`.yellow);
+      
+      // Save user transcript to database
+      try {
+        await db.addTranscript({
+          call_sid: callSid,
+          speaker: 'user',
+          message: text,
+          interaction_count: interactionCount
+        });
+        
+        // Update call state
+        await db.updateCallState(callSid, 'user_spoke', {
+          message: text,
+          interaction_count: interactionCount
+        });
+      } catch (dbError) {
+        console.error('Database error adding user transcript:', dbError);
+      }
+      
       gptService.completion(text, interactionCount);
       interactionCount += 1;
     });
     
     // GPT service event handler (will be set up after gptService is initialized)
     const handleGptReply = async (gptReply, icount) => {
-      console.log(`Interaction ${icount}: GPT -> TTS: ${gptReply.partialResponse}`.green );
+      console.log(`Interaction ${icount}: GPT -> TTS: ${gptReply.partialResponse}`.green);
+      
+      // Save AI response to database
+      try {
+        await db.addTranscript({
+          call_sid: callSid,
+          speaker: 'ai',
+          message: gptReply.partialResponse,
+          interaction_count: icount
+        });
+        
+        // Update call state
+        await db.updateCallState(callSid, 'ai_responded', {
+          message: gptReply.partialResponse,
+          interaction_count: icount
+        });
+      } catch (dbError) {
+        console.error('Database error adding AI transcript:', dbError);
+      }
+      
       ttsService.generate(gptReply, icount);
     };
 
@@ -247,26 +375,159 @@ app.ws('/connection', (ws) => {
   }
 });
 
-// Health check endpoint
-// Twilio status callback endpoint (recommended to be validated by Twilio signature)
-app.post('/status', validateTwilioRequest, (req, res) => {
-  // Persist or log Twilio status updates (CallSid, CallStatus etc.)
+// Function to handle call end and generate summary
+async function handleCallEnd(callSid, callStartTime) {
   try {
-    console.log('Twilio status callback received:', req.body);
-    // Minimal response for Twilio
-    res.status(200).send('OK');
-  } catch (err) {
-    console.error('Error handling status callback', err);
-    res.status(500).send('Server error');
+    const callEndTime = new Date();
+    const duration = Math.round((callEndTime - callStartTime) / 1000); // Duration in seconds
+
+    // Get all transcripts for this call
+    const transcripts = await db.getCallTranscripts(callSid);
+    
+    // Generate call summary
+    const summary = generateCallSummary(transcripts, duration);
+    
+    // Update call status in database
+    await db.updateCallStatus(callSid, 'completed', {
+      ended_at: callEndTime.toISOString(),
+      duration: duration,
+      call_summary: summary.summary,
+      ai_analysis: JSON.stringify(summary.analysis)
+    });
+
+    // Update call state
+    await db.updateCallState(callSid, 'call_ended', {
+      end_time: callEndTime.toISOString(),
+      duration: duration,
+      total_interactions: transcripts.length
+    });
+
+    // Get call details for webhook
+    const callDetails = await db.getCall(callSid);
+    
+    // Create webhook notifications for call completion
+    if (callDetails && callDetails.user_chat_id) {
+      await db.createWebhookNotification(callSid, 'call_completed', callDetails.user_chat_id);
+      await db.createWebhookNotification(callSid, 'call_summary', callDetails.user_chat_id);
+    }
+
+    console.log(`Call ${callSid} ended. Duration: ${duration}s, Transcripts: ${transcripts.length}`.green);
+
+  } catch (error) {
+    console.error('Error handling call end:', error);
+  }
+}
+
+// Function to generate call summary
+function generateCallSummary(transcripts, duration) {
+  if (!transcripts || transcripts.length === 0) {
+    return {
+      summary: 'No conversation recorded',
+      analysis: { total_messages: 0, user_messages: 0, ai_messages: 0 }
+    };
+  }
+
+  const userMessages = transcripts.filter(t => t.speaker === 'user');
+  const aiMessages = transcripts.filter(t => t.speaker === 'ai');
+  
+  // Basic analysis
+  const analysis = {
+    total_messages: transcripts.length,
+    user_messages: userMessages.length,
+    ai_messages: aiMessages.length,
+    duration_seconds: duration,
+    conversation_turns: Math.max(userMessages.length, aiMessages.length)
+  };
+
+  // Generate simple summary
+  const summary = `Call completed with ${transcripts.length} messages over ${Math.round(duration/60)} minutes. ` +
+    `User spoke ${userMessages.length} times, AI responded ${aiMessages.length} times.`;
+
+  return { summary, analysis };
+}
+
+// API Endpoints for database access
+
+// Get call details with transcripts
+app.get('/api/calls/:callSid', async (req, res) => {
+  try {
+    const { callSid } = req.params;
+    
+    const call = await db.getCall(callSid);
+    if (!call) {
+      return res.status(404).json({ error: 'Call not found' });
+    }
+
+    const transcripts = await db.getCallTranscripts(callSid);
+    
+    res.json({
+      call,
+      transcripts,
+      transcript_count: transcripts.length
+    });
+  } catch (error) {
+    console.error('Error fetching call details:', error);
+    res.status(500).json({ error: 'Failed to fetch call details' });
   }
 });
 
-app.get('/health', (req, res) => {
-  res.json({ 
-    status: 'healthy', 
-    timestamp: new Date().toISOString(),
-    active_calls: callConfigurations.size
-  });
+// Get all calls with summary
+app.get('/api/calls', async (req, res) => {
+  try {
+    const limit = parseInt(req.query.limit) || 50;
+    const calls = await db.getCallsWithTranscripts(limit);
+    
+    res.json({
+      calls,
+      count: calls.length
+    });
+  } catch (error) {
+    console.error('Error fetching calls:', error);
+    res.status(500).json({ error: 'Failed to fetch calls' });
+  }
+});
+
+// Webhook endpoint for external notifications
+app.post('/webhook/call-status', async (req, res) => {
+  try {
+    const { CallSid, CallStatus, Duration } = req.body;
+    
+    console.log(`Webhook: Call ${CallSid} status: ${CallStatus}`.blue);
+    
+    // Update call status if it exists in our database
+    const call = await db.getCall(CallSid);
+    if (call) {
+      await db.updateCallStatus(CallSid, CallStatus.toLowerCase(), {
+        duration: Duration ? parseInt(Duration) : null
+      });
+    }
+    
+    res.status(200).send('OK');
+  } catch (error) {
+    console.error('Webhook error:', error);
+    res.status(500).send('Error');
+  }
+});
+
+// Health check endpoint (enhanced)
+app.get('/health', async (req, res) => {
+  try {
+    const calls = await db.getCallsWithTranscripts(1);
+    res.json({ 
+      status: 'healthy', 
+      timestamp: new Date().toISOString(),
+      active_calls: callConfigurations.size,
+      database_connected: true,
+      recent_calls: calls.length
+    });
+  } catch (error) {
+    res.status(500).json({
+      status: 'unhealthy',
+      timestamp: new Date().toISOString(),
+      database_connected: false,
+      error: error.message
+    });
+  }
 });
 
 // Get call configuration (for debugging)
@@ -289,6 +550,21 @@ app.get('/call-config/:callSid', (req, res) => {
   }
 });
 
-app.listen(PORT);
-console.log(`Api server running on port ${PORT}`);
-// console.log(`Outbound call endpoint available at: POST /outbound-call`);
+// Start webhook service
+// Removed from here - now started in startServer() function after database init
+
+// Start the server with proper initialization sequence
+startServer();
+
+// Graceful shutdown
+process.on('SIGINT', async () => {
+  console.log('\nShutting down gracefully...');
+  await db.close();
+  process.exit(0);
+});
+
+process.on('SIGTERM', async () => {
+  console.log('\nShutting down gracefully...');
+  await db.close();
+  process.exit(0);
+});
