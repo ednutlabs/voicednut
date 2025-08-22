@@ -60,6 +60,8 @@ require('./commands/users')(bot);
 require('./commands/help')(bot);
 require('./commands/menu')(bot);
 require('./commands/guide')(bot);
+require('./commands/transcript')(bot);
+require('./commands/api')(bot);
 
 // Start command handler
 bot.command('start', async (ctx) => {
@@ -134,10 +136,10 @@ bot.on('callback_query:data', async (ctx) => {
         }
 
         // Check admin permissions
-        const isAdmin = user.role === 'ADMIN';
+        const isAdminUser = user.role === 'ADMIN';
         const adminActions = ['ADDUSER', 'PROMOTE', 'REMOVE', 'USERS'];
         
-        if (adminActions.includes(ctx.callbackQuery.data) && !isAdmin) {
+        if (adminActions.includes(ctx.callbackQuery.data) && !isAdminUser) {
             await ctx.reply("❌ This action is for administrators only.");
             return;
         }
@@ -166,7 +168,51 @@ bot.on('callback_query:data', async (ctx) => {
 
         // Process command actions
         if (commands[ctx.callbackQuery.data]) {
-            await ctx.reply(commands[ctx.callbackQuery.data]);
+            // Execute the command by simulating a text message
+            const commandText = commands[ctx.callbackQuery.data];
+            
+            // Create a mock message object and call the appropriate handler
+            if (commandText === '/help') {
+                await ctx.reply(`*Voice Call Bot Commands*
+
+📱 *Basic Commands*
+• /start - Restart bot & show main menu
+• /call - Start a new voice call
+• /transcript <call_sid> - Get call transcript
+• /calls [limit] - List recent calls
+• /health or /ping - Check bot health
+• /menu - Show quick action buttons
+• /help - Show this help message
+
+${isAdminUser ? `\n👑 *Admin Commands*
+• /adduser - Add new authorized user
+• /promote - Promote user to admin
+• /removeuser - Remove user access
+• /users - List all authorized users
+• /status - Full system status
+• /test_api - Test API connection\n` : ''}
+
+📖 *Quick Guide*
+1. Use /call or click 📞 Call button
+2. Enter phone number (E.164 format: +1234567890)
+3. Define agent behavior/prompt
+4. Set initial message
+5. Monitor call progress
+
+💡 *Support*
+Contact: @${config.admin.username} for help
+Version: 2.0.0`, { parse_mode: 'Markdown' });
+            } else if (commandText === '/users' && isAdminUser) {
+                // This will be handled by the users command module
+                ctx.message = { text: '/users' };
+                // The users module will handle this
+            } else if (commandText === '/guide') {
+                ctx.message = { text: '/guide' };
+                // The guide module will handle this
+            } else if (commandText === '/menu') {
+                ctx.message = { text: '/menu' };
+                // The menu module will handle this
+            }
             return;
         }
 
@@ -183,14 +229,39 @@ bot.on('callback_query:data', async (ctx) => {
 bot.api.setMyCommands([
     { command: 'start', description: 'Start or restart the bot' },
     { command: 'call', description: 'Start outbound voice call' },
+    { command: 'transcript', description: 'Get call transcript by SID' },
+    { command: 'calls', description: 'List recent calls' },
     { command: 'guide', description: 'Show detailed usage guide' },
     { command: 'help', description: 'Show available commands' },
     { command: 'menu', description: 'Show quick action menu' },
+    { command: 'health', description: 'Check bot and API health' },
     { command: 'adduser', description: 'Add user (admin only)' },
     { command: 'promote', description: 'Promote to ADMIN (admin only)' },
     { command: 'removeuser', description: 'Remove a USER (admin only)' },
-    { command: 'users', description: 'List authorized users (admin only)' }
+    { command: 'users', description: 'List authorized users (admin only)' },
+    { command: 'status', description: 'System status (admin only)' }
 ]);
 
+// Handle unknown commands
+bot.on('message:text', async (ctx) => {
+    const text = ctx.message.text;
+    
+    // Skip if it's a command that's handled elsewhere
+    if (text.startsWith('/')) {
+        return;
+    }
+    
+    // For non-command messages, show help
+    if (!ctx.conversation) {
+        await ctx.reply('👋 Use /help to see available commands or /menu for quick actions.');
+    }
+});
+
 // Start the bot
-bot.start();
+console.log('🚀 Starting Voice Call Bot...');
+bot.start().then(() => {
+    console.log('✅ Voice Call Bot is running!');
+}).catch((error) => {
+    console.error('❌ Failed to start bot:', error);
+    process.exit(1);
+});

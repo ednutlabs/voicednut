@@ -1,208 +1,428 @@
-# Voicednut API
+# Voice Call Bot System 🤖📞
 
-## 🧠 ElevenLabs + Twilio + Telegram Bot Integration
+[![Node.js](https://img.shields.io/badge/Node.js-16%2B-green.svg)](https://nodejs.org/)
+[![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+[![Telegram](https://img.shields.io/badge/Telegram-Bot-blue.svg)](https://core.telegram.org/bots)
+[![Twilio](https://img.shields.io/badge/Twilio-API-red.svg)](https://www.twilio.com/)
 
-This Node.js-based API allows you to initiate, stream, and log phone calls via Twilio, powered by ElevenLabs Conversational AI — and notify users on Telegram using grammY bot.
+A comprehensive Telegram bot system for making AI-powered voice calls using Twilio, OpenRouter APIs, and real-time transcription with Deepgram.
 
----
+## 🌟 Features
 
-## ✅ Features
+### 🤖 Bot Features
 
-- 🔁 Inbound & outbound call handling
-- 🧠 Real-time AI conversations with ElevenLabs
-- 🎧 WebSocket media streaming (Twilio <-> ElevenLabs)
-- ✅ Call status tracking and metadata storage
-- 📝 Post-call transcription + sentiment & metadata
-- 🔊 Audio summary to Telegram user
-- ⚙️ SQLite3 local persistence
-- ✅ Test suite via Mocha + Chai + Sinon
-- 🔄 GitHub Actions CI & AWS EC2 deployment
+- AI-powered voice conversations with customizable agents
+- Outbound call management and monitoring
+- Real-time transcription and conversation logging
+- Call analytics, summaries, and detailed reporting
+- Multi-user authorization system with role-based access
+- Admin controls for user and system management
+- Complete call history with searchable transcripts
+- Real-time notifications via Telegram webhooks
+- Custom AI prompts and agent personalities
 
----
+### 🌐 API Features
 
-## 📦 Prerequisites
+- RESTful API for call management
+- Real-time call status and progress tracking
+- WebSocket connections for live audio streaming
+- Persistent data storage with SQLite
+- Secure webhook notifications
+- Comprehensive health monitoring
+- Text-to-speech with Deepgram
+- Speech-to-text with real-time processing
 
-- Node.js v18+
-- Valid `.env` (see `.env.example`)
+## 🏗️ System Architecture
 
-An advanced README for developers and integrators working with the Voicednut project. This file covers the API and bot components, deployment considerations, and examples you can use to test and extend the system.
+```mermaid
+graph TB
+    A[Telegram Bot<br/>Grammy.js] --> B[API Server<br/>Express.js]
+    B --> C[Twilio API<br/>Voice Calls]
+    A --> D[SQLite DB<br/>User Auth]
+    B --> E[Database<br/>Call Data]
+    B --> F[AI Services<br/>OpenRouter]
+    B --> G[Deepgram<br/>Transcription]
+    
+    style A fill:#0088cc
+    style B fill:#ff6b35
+    style C fill:#f25c54
+    style F fill:#4ecdc4
+    style G fill:#45b7d1
+```
 
-## Overview
+## 🚀 Quick Start
 
-Voicednut glues together three core systems:
+### Prerequisites
 
-- Twilio (voice + media webhooks) — handles programmable voice calls and streaming audio.
-- ElevenLabs Conversational AI — drives agent voice responses, transcriptions, and summary audio.
-- grammY (Telegram) — notifies users with call summaries, transcripts, and audio snippets via a Telegram bot.
+- Node.js 16+
+- [Telegram Bot Token](https://t.me/botfather)
+- [Twilio Account](https://console.twilio.com/) (Account SID, Auth Token, Phone Number)
+- [OpenRouter API Key](https://openrouter.ai/)
+- [Deepgram API Key](https://deepgram.com/)
 
-The codebase is purpose-built to:
+### Installation
 
-- Handle inbound and outbound calls
-- Stream media between Twilio and ElevenLabs in near real-time
-- Persist call metadata and transcripts to a small SQLite DB for audit and retrieval
-- Send post-call summaries and audio to Telegram users
+1. **Clone the repository**
+   
+   ```bash
+   git clone https://github.com/ednutlabs/voicednut.git
+   cd voicednut
+   ```
+1. **Set up API Server**
+   
+   ```bash
+   cd api
+   npm install
+   cp .env.example .env
+   # Edit .env with your credentials
+   npm start
+   ```
+1. **Set up Bot**
+   
+   ```bash
+   cd ../bot
+   npm install
+   cp .env.example .env
+   # Edit .env with your credentials
+   npm start
+   ```
+1. **Start using the bot**
+- Message your bot on Telegram
+- Use `/start` to begin
+- Use `/call` to make your first AI call
 
-## Architecture (high level)
+## ⚙️ Configuration
 
-- Client (Twilio) -> HTTP webhook -> `api/app.js` (Express)
-- `routes/` contains endpoints for streaming, TwiML responses, and callbacks
-- Streaming component proxies audio frames between Twilio and ElevenLabs
-- After-call: ElevenLabs posts transcription and summary webhooks to the server
-- Server persists metadata in `db/data.db` and notifies Telegram via `bot/`
+### API Server Configuration (`api/.env`)
 
-## Repository layout
+```env
+# Twilio Configuration
+TWILIO_ACCOUNT_SID=ACxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+TWILIO_AUTH_TOKEN=your_auth_token
+FROM_NUMBER=+1234567890
 
-- `api/` — Express application (`app.js`) and package manifest for the API service. This is the runtime that Twilio and ElevenLabs talk to.
-- `bot/` — grammY Telegram bot, commands and helpers used to notify users and accept small bot-driven commands.
-- `routes/` — handlers used by the API for Twilio webhooks, streaming endpoints, transcription, and TTS.
-- `functions/` — stateless helper functions used by routes and unit tests (e.g., `placeOrder.js`, `checkInventory.js`).
-- `db/` — SQLite file (`data.db`) and `db.js` helper for queries.
-- `test/` — unit tests for functions and integration-like smoke tests.
+# Server Configuration
+PORT=3000
+SERVER=your-domain.com
 
-## Environment variables (detailed)
+# OpenRouter AI Configuration
+OPENROUTER_API_KEY=sk-or-v1-xxx
+OPENROUTER_MODEL=meta-llama/llama-3.1-8b-instruct:free
+YOUR_SITE_URL=http://localhost:3000
+YOUR_SITE_NAME=Voice Call Bot
 
-Create a `.env` in the project root (do not commit). Example keys the application reads:
+# Deepgram Configuration
+DEEPGRAM_API_KEY=your_deepgram_key
+VOICE_MODEL=aura-asteria-en
 
-- PORT=3000
-- TWILIO_ACCOUNT_SID=ACxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
-- TWILIO_AUTH_TOKEN=your_twilio_auth_token
-- TWILIO_PHONE_NUMBER=+15551234567
-- ELEVENLABS_API_KEY=elevenlabs_xxx
-- ELEVENLABS_AGENT_ID=agent-uuid-or-id
-- TELEGRAM_BOT_TOKEN=123456:ABC-DEF1234ghIkl-zyx57W2v1u123ew11
-- TELEGRAM_CHAT_ID=987654321  # optional: where to send notifications
-- NODE_ENV=development
+# Optional Features
+RECORDING_ENABLED=false
+TELEGRAM_BOT_TOKEN=your_telegram_bot_token
+```
 
-Security tips:
+### Bot Configuration (`bot/.env`)
 
-- Use a secrets manager for production. Keep `.env` out of source control via `.gitignore`.
-- Validate Twilio request signatures on webhook endpoints to ensure calls originate from Twilio.
+```env
+BOT_TOKEN=1234567890:ABCdefGHIjklMNOpqrsTUVwxyz
+ADMIN_TELEGRAM_ID=123456789
+ADMIN_TELEGRAM_USERNAME=your_username
+API_BASE=http://localhost:3000
+```
 
-## API: endpoints and examples
+## 📖 API Documentation
 
-General: the API returns JSON for REST endpoints and TwiML or webhook handling where appropriate. Replace HOST with your public URL.
+### Core Endpoints
 
-1) Start an outbound call
+#### Health Check
 
+```http
+GET /health
+```
+
+#### Make Outbound Call
+
+```http
 POST /outbound-call
-
-Request JSON example:
+Content-Type: application/json
 
 {
   "number": "+1234567890",
-  "prompt": "You are an assistant. Keep responses short.",
-  "first_message": "Hello, this is a reminder call",
-  "user_chat_id": 123456789
+  "prompt": "You are a friendly sales assistant...",
+  "first_message": "Hello! How can I help you today?",
+  "user_chat_id": "123456789"
 }
-
-Response: 202 Accepted with a call SID and tracking metadata.
-
-2) Inbound calls from Twilio
-
-POST /inbound-call
-
-Twilio hits this endpoint when your Twilio number receives a call. The handler returns TwiML or starts a streaming session with ElevenLabs. Test locally with ngrok and update the Twilio webhook URL.
-
-3) Call status callback
-
-POST /status
-
-Twilio will POST call lifecycle events (queued, ringing, in-progress, completed). Persist useful fields (CallSid, From, To, Status, Duration).
-
-4) ElevenLabs webhooks
-
-- POST /status/transcription — full transcript JSON (words, timestamps, confidence, sentiment)
-- POST /status/audio — summary audio (usually base64 payload or URL depending on ElevenLabs configuration)
-
-For exact payload shapes, consult ElevenLabs webhook docs and inspect what your agent sends in development.
-
-## Streaming flow (detailed)
-
-1. Twilio open media stream (Media Streams) to your `routes/stream.js` handler.
-2. Server relays audio frames to ElevenLabs conversational API via a WebSocket or HTTP streaming protocol.
-3. ElevenLabs sends intermediate responses (if configured) and final transcript/audio via webhooks.
-4. Server maps those responses back to the Twilio call (TwiML or PSTN audio), records metadata, and sends a notification via Telegram.
-
-Important notes:
-
-- Streaming audio is stateful; ensure proper reconnection backoff and track per-call sessions by `CallSid`.
-- Keep audio chunk sizes small during development to avoid buffer pressure.
-
-## Database
-
-The project uses SQLite for convenience. `db/db.js` contains helpers to create and query a simple schema. Typical tables:
-
-- calls(id, call_sid, from_number, to_number, status, duration, started_at, ended_at, metadata_json)
-- transcripts(id, call_id, text, words_json, sentiment_json, created_at)
-
-For production you can migrate to Postgres or another RDBMS.
-
-## Bot (`bot/`) — setup and usage
-
-The `bot/` folder implements a grammY Telegram bot. It performs two roles:
-
-- Send post-call notifications and audio summaries to users
-- Offer small interactive commands for admins (e.g., `/menu`, `/users`, `/promote`)
-
-Setup
-
-1. Create a Telegram bot with BotFather and get the `TELEGRAM_BOT_TOKEN`.
-2. Set `TELEGRAM_CHAT_ID` (or send a message to the bot and read the chat ID in logs while developing).
-3. Run the bot with the same Node environment as the API, or run it separately via `node bot/bot.js`.
-
-Common commands (implemented under `bot/commands`):
-
-- `/help` — lists commands
-- `/menu` — shows a simple menu
-- `/users` — list known users (from `db/`)
-- `/adduser` `/removeuser` `/promote` — admin user management helpers
-
-Example: send a post-call summary from the API to the bot
-
-1. After call complete, API writes transcript and summary to the DB.
-2. API calls a bot helper or emits an event that `bot/` listens to, which sends a message and optional audio to `TELEGRAM_CHAT_ID`.
-
-## Testing
-
-- Unit tests: Mocha + Chai + Sinon (see `test/`)
-- Run all tests locally:
-
-```bash
-npm test
 ```
 
-- Integration: to exercise Twilio workflows locally, use `ngrok` to expose a public HTTPS endpoint and update Twilio webhooks.
+#### Get Call Details
 
-## Local development tips
+```http
+GET /api/calls/{call_sid}
+```
 
-- Use `npm run dev` (if defined) or `node api/app.js` to start the API.
-- Use `ngrok http 3000` and point Twilio to the public URL (remember ngrok gives HTTPS).
-- Keep logs visible; webhook payloads are the fastest way to debug issues.
+#### List Recent Calls
 
-## Deployment
+```http
+GET /api/calls?limit=20
+```
 
-- This service can be deployed on any Node-friendly host (EC2, DigitalOcean, Heroku). For production:
-  - Use a managed database
-  - Store secrets in a secret manager (AWS Secrets Manager, Vault)
-  - Run multiple instances behind a load balancer and use a centralized store for call/session state (Redis) if you need horizontal scaling
+### Database Schema
 
-## Observability & troubleshooting
+<details>
+<summary>Click to view database tables</summary>
 
-- Log the Twilio CallSid and correlate logs across request handlers.
-- Persist raw webhook payloads (redact secrets) for replay during debugging.
-- When streaming problems occur, verify: network, call session lifecycle, and ElevenLabs session tokens.
+#### Calls Table
 
-## Recommended next improvements
+```sql
+CREATE TABLE calls (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    call_sid TEXT UNIQUE NOT NULL,
+    phone_number TEXT NOT NULL,
+    status TEXT DEFAULT 'initiated',
+    duration INTEGER,
+    prompt TEXT,
+    first_message TEXT,
+    call_summary TEXT,
+    ai_analysis TEXT,
+    user_chat_id TEXT,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    started_at DATETIME,
+    ended_at DATETIME
+);
+```
 
-- Add Twilio request signature verification middleware.
-- Add an explicit `.env.example` file with comments for each variable.
-- Add a small Postman collection or OpenAPI spec for the REST endpoints.
-- Add end-to-end integration tests that mock Twilio & ElevenLabs responses.
+#### Transcripts Table
 
-## Contributing
+```sql
+CREATE TABLE transcripts (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    call_sid TEXT NOT NULL,
+    speaker TEXT NOT NULL, -- 'user' or 'ai'
+    message TEXT NOT NULL,
+    timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
+    interaction_count INTEGER,
+    FOREIGN KEY(call_sid) REFERENCES calls(call_sid)
+);
+```
 
-Please open issues or PRs. Add tests for new features and keep changes scope-limited.
+</details>
 
-## License
+## 🤖 Bot Commands
 
-MIT — see `LICENSE`.
+### Basic Commands
+
+- `/start` - Start or restart the bot
+- `/call` - Start a new voice call
+- `/transcript <call_sid>` - Get call transcript
+- `/calls [limit]` - List recent calls
+- `/health` - Check bot and API health
+- `/guide` - Show detailed usage guide
+- `/help` - Show available commands
+- `/menu` - Show quick action buttons
+
+### Admin Commands
+
+- `/adduser` - Add new authorized user
+- `/promote` - Promote user to admin
+- `/removeuser` - Remove user access
+- `/users` - List all authorized users
+- `/status` - Full system status check
+- `/test_api` - Test API connection
+
+## 📁 Project Structure
+
+```
+voice-call-bot/
+├── api/                    # API Server (Express.js)
+│   ├── app.js             # Main API application
+│   ├── routes/            # API route handlers
+│   │   ├── gpt.js         # AI integration
+│   │   ├── stream.js      # Audio streaming
+│   │   ├── transcription.js # Speech-to-text
+│   │   ├── tts.js         # Text-to-speech
+│   │   └── status.js      # Webhook service
+│   ├── db/                # Database management
+│   └── functions/         # AI function calling
+│
+├── bot/                   # Telegram Bot (Grammy.js)
+│   ├── bot.js            # Main bot application
+│   ├── commands/         # Bot command handlers
+│   │   ├── call.js       # Voice call functionality
+│   │   ├── transcript.js # Transcript management
+│   │   ├── api.js        # API testing
+│   │   └── ...
+│   ├── db/               # Bot database
+│   └── utils/            # Utility functions
+│
+└── README.md             # This documentation
+```
+
+## 🔧 Development
+
+### Local Development
+
+```bash
+# Terminal 1 - API Server
+cd api && npm run dev
+
+# Terminal 2 - Bot
+cd bot && npm run dev
+```
+
+### Production Deployment
+
+#### Using PM2
+
+```bash
+npm install -g pm2
+
+# Start services
+cd api && pm2 start npm --name "voice-api" -- start
+cd bot && pm2 start npm --name "voice-bot" -- start
+
+# Save configuration
+pm2 save && pm2 startup
+```
+
+#### Using Docker
+
+```dockerfile
+FROM node:16-alpine
+WORKDIR /app
+COPY package*.json ./
+RUN npm install
+COPY . .
+EXPOSE 3000
+CMD ["npm", "start"]
+```
+
+## 🎯 Usage Examples
+
+### Making Your First Call
+
+1. **Start the bot**: Send `/start` to your bot
+1. **Initiate a call**: Use `/call` command
+1. **Enter details**:
+- Phone number: `+1234567890`
+- AI prompt: `"You are a friendly customer service agent"`
+- First message: `"Hello! How can I help you today?"`
+1. **Monitor progress**: Receive real-time notifications
+1. **Get transcript**: Use `/transcript <call_sid>` after the call
+
+### AI Model Configuration
+
+Available free models through OpenRouter:
+
+- `meta-llama/llama-3.1-8b-instruct:free` (default)
+- `microsoft/wizardlm-2-8x22b`
+- `google/gemma-2-9b-it:free`
+- `qwen/qwen-2-7b-instruct:free`
+
+### Voice Models (Deepgram)
+
+Available TTS voices:
+
+- `aura-asteria-en` - Friendly female (default)
+- `aura-orion-en` - Friendly male
+- `aura-luna-en` - Warm female
+- `aura-arcas-en` - Professional male
+- And many more…
+
+## 🛠️ Troubleshooting
+
+<details>
+<summary>Common Issues & Solutions</summary>
+
+### Bot not responding
+
+- ✅ Check bot token in `.env`
+- ✅ Verify bot is running with `npm start`
+- ✅ Ensure user is authorized
+
+### API connection failed
+
+- ✅ Check API server is running
+- ✅ Verify `API_BASE` URL in bot `.env`
+- ✅ Test with `/test_api` command
+
+### Calls not working
+
+- ✅ Verify Twilio credentials
+- ✅ Check phone number has voice capabilities
+- ✅ Ensure webhook URL is accessible
+- ✅ Use ngrok for local testing: `ngrok http 3000`
+
+### AI responses not working
+
+- ✅ Check OpenRouter API key
+- ✅ Verify model name and availability
+- ✅ Ensure sufficient credits
+
+</details>
+
+## 🔒 Security
+
+- User authorization required for all operations
+- Admin-only commands protected
+- Input validation for all user inputs
+- Secure phone number format validation
+- Protected sensitive information in logs
+- Webhook signature verification
+
+## 📊 Monitoring
+
+### Health Checks
+
+- API: `GET /health`
+- Bot: `/health` command
+- Admin: `/status` command
+
+### Logging
+
+- Structured logging with timestamps
+- Error tracking and debugging
+- Call analytics and metrics
+- Performance monitoring
+
+## 🤝 Contributing
+
+1. Fork the repository
+1. Create a feature branch (`git checkout -b feature/amazing-feature`)
+1. Commit your changes (`git commit -m 'Add amazing feature'`)
+1. Push to the branch (`git push origin feature/amazing-feature`)
+1. Open a Pull Request
+
+## 📝 License
+
+This project is licensed under the MIT License - see the <LICENSE> file for details.
+
+## 🙋‍♂️ Support
+
+- 📖 **Documentation**: Check this README and inline code comments
+- 🐛 **Issues**: [GitHub Issues](https://github.com/yourusername/voice-call-bot/issues)
+- 💬 **Discussions**: [GitHub Discussions](https://github.com/yourusername/voice-call-bot/discussions)
+- 📧 **Contact**: Your contact information
+
+## 🎉 Acknowledgments
+
+- [Twilio](https://www.twilio.com/) for voice communication infrastructure
+- [OpenRouter](https://openrouter.ai/) for AI model access
+- [Deepgram](https://deepgram.com/) for speech services
+- [Grammy](https://grammy.dev/) for Telegram bot framework
+- All contributors who helped build this project
+
+## 📊 Project Status
+
+- ✅ **Stable**: Core functionality working
+- 🔄 **Active Development**: Regular updates and improvements
+- 🐛 **Bug Reports**: Welcome and addressed promptly
+- 🚀 **Feature Requests**: Open to new ideas and suggestions
+
+-----
+
+<div align="center">
+
+**⭐ If you find this project helpful, please consider giving it a star! ⭐**
+
+[Report Bug](https://github.com/yourusername/voice-call-bot/issues) · [Request Feature](https://github.com/yourusername/voice-call-bot/issues) · [Contribute](CONTRIBUTING.md)
+
+</div>

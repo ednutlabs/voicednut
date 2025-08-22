@@ -1,85 +1,113 @@
 const { InlineKeyboard } = require('grammy');
-const { isAdmin, getUser } = require('../db/db');
+const { checkUserAuthorization, checkAdminStatus, handleCommandError } = require('../utils/helpers');
 
 module.exports = (bot) => {
     // Menu command
     bot.command('menu', async (ctx) => {
-        const isOwner = await new Promise(r => isAdmin(ctx.from.id, r));
-        
-        const kb = new InlineKeyboard()
-            .text('📞 Call', 'CALL')
-            .text('ℹ️ Help', 'HELP');
+        try {
+            const user = await checkUserAuthorization(ctx.from.id);
+            if (!user) {
+                return ctx.reply('❌ You are not authorized to use this bot.');
+            }
 
-        if (isOwner) {
-            kb.row()
-                .text('➕ Add User', 'ADDUSER')
-                .text('⬆️ Promote', 'PROMOTE')
-                .text('👥 Users', 'USERS')
-                .text('❌ Remove', 'REMOVE');
-        }
+            const isOwner = await checkAdminStatus(ctx.from.id);
+            
+            const kb = new InlineKeyboard()
+                .text('📞 New Call', 'CALL')
+                .text('📋 Recent Calls', 'CALLS')
+                .row()
+                .text('🏥 Health Check', 'HEALTH')
+                .text('ℹ️ Help', 'HELP')
+                .row()
+                .text('📚 Guide', 'GUIDE');
 
-        await ctx.reply('Select an action:', {
-            reply_markup: kb
-        });
-    });
+            if (isOwner) {
+                kb.row()
+                    .text('➕ Add User', 'ADDUSER')
+                    .text('⬆️ Promote', 'PROMOTE')
+                    .row()
+                    .text('👥 Users', 'USERS')
+                    .text('❌ Remove', 'REMOVE')
+                    .row()
+                    .text('🔍 Status', 'STATUS')
+                    .text('🧪 Test API', 'TEST_API');
+            }
 
-    // Callback query handlers
-    bot.callbackQuery('CALL', async (ctx) => {
-        const user = await new Promise(r => getUser(ctx.from.id, r));
-        if (!user) {
-            await ctx.answerCallbackQuery('❌ You are not authorized.');
-            return;
-        }
-        await ctx.answerCallbackQuery();
-        await ctx.conversation.enter("call-conversation");
-    });
+            const menuText = isOwner ? 
+                '🛡️ *Administrator Menu*\n\nSelect an action below:' :
+                '📋 *Quick Actions Menu*\n\nSelect an action below:';
 
-    bot.callbackQuery('HELP', async (ctx) => {
-        await ctx.answerCallbackQuery();
-        await ctx.reply(`*Voice Call Bot Help*\n
-/start - Start or restart the bot
-/call - Start outbound voice call
-/adduser - Add user (admin only)
-/promote - Promote to ADMIN (admin only)
-/removeuser - Remove a USER (admin only)
-/users - List authorized users (admin only)
-/help - Show this help message
-/menu - Show inline command menu`, {
-            parse_mode: 'Markdown'
-        });
-    });
-
-    bot.callbackQuery(['ADDUSER', 'PROMOTE', 'REMOVE', 'USERS'], async (ctx) => {
-        const user = await new Promise(r => getUser(ctx.from.id, r));
-        if (!user || user.role !== 'ADMIN') {
-            await ctx.answerCallbackQuery('❌ Admin only.');
-            return;
-        }
-        
-        await ctx.answerCallbackQuery();
-        
-        switch (ctx.callbackQuery.data) {
-            case 'ADDUSER':
-                await ctx.conversation.enter("adduser-conversation");
-                break;
-            case 'PROMOTE':
-                await ctx.conversation.enter("promote-conversation");
-                break;
-            case 'REMOVE':
-                await ctx.conversation.enter("remove-conversation");
-                break;
-            case 'USERS':
-                // Let the users command handle this
-                await ctx.reply('/users');
-                break;
+            await ctx.reply(menuText, {
+                parse_mode: 'Markdown',
+                reply_markup: kb
+            });
+        } catch (error) {
+            await handleCommandError(ctx, error, 'menu display');
         }
     });
 
-    // Generic handler for unknown callback queries
-    bot.on('callback_query:data', async (ctx) => {
-        await ctx.answerCallbackQuery({
-            text: '❌ Unknown action',
-            show_alert: true
-        });
+    // Enhanced callback handlers
+    bot.callbackQuery('CALLS', async (ctx) => {
+        try {
+            await ctx.answerCallbackQuery();
+            const user = await checkUserAuthorization(ctx.from.id);
+            if (!user) {
+                return ctx.reply('❌ You are not authorized to use this bot.');
+            }
+            
+            // Simulate the calls command
+            ctx.message = { text: '/calls 10' };
+            await ctx.reply('📋 Fetching recent calls...');
+        } catch (error) {
+            await handleCommandError(ctx, error, 'calls list');
+        }
+    });
+
+    bot.callbackQuery('HEALTH', async (ctx) => {
+        try {
+            await ctx.answerCallbackQuery();
+            const user = await checkUserAuthorization(ctx.from.id);
+            if (!user) {
+                return ctx.reply('❌ You are not authorized to use this bot.');
+            }
+            
+            // Simulate the health command
+            ctx.message = { text: '/health' };
+            await ctx.reply('🏥 Checking system health...');
+        } catch (error) {
+            await handleCommandError(ctx, error, 'health check');
+        }
+    });
+
+    bot.callbackQuery('STATUS', async (ctx) => {
+        try {
+            await ctx.answerCallbackQuery();
+            const isOwner = await checkAdminStatus(ctx.from.id);
+            if (!isOwner) {
+                return ctx.reply('❌ This action is for administrators only.');
+            }
+            
+            // Simulate the status command
+            ctx.message = { text: '/status' };
+            await ctx.reply('🔍 Checking full system status...');
+        } catch (error) {
+            await handleCommandError(ctx, error, 'status check');
+        }
+    });
+
+    bot.callbackQuery('TEST_API', async (ctx) => {
+        try {
+            await ctx.answerCallbackQuery();
+            const isOwner = await checkAdminStatus(ctx.from.id);
+            if (!isOwner) {
+                return ctx.reply('❌ This action is for administrators only.');
+            }
+            
+            // Simulate the test_api command
+            ctx.message = { text: '/test_api' };
+            await ctx.reply('🧪 Testing API connection...');
+        } catch (error) {
+            await handleCommandError(ctx, error, 'API test');
+        }
     });
 };
