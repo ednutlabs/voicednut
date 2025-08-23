@@ -86,8 +86,7 @@ async function callFlow(conversation, ctx) {
                 `🔔 *You'll receive notifications about:*\n` +
                 `• Call progress updates\n` +
                 `• Complete transcript when call ends\n` +
-                `• AI-generated summary\n\n` +
-                `Use /transcript ${response.data.call_sid} to get transcript later`;
+                `• AI-generated summary\n\n`;
 
             await ctx.reply(successMsg, { parse_mode: 'Markdown' });
         } else {

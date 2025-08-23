@@ -1,37 +1,13 @@
 const axios = require('axios');
 
-// Function to escape Telegram Markdown special characters
-function escapeMarkdown(text) {
-  if (!text) return '';
-  return text
-    .replace(/\\/g, '\\\\')
-    .replace(/\*/g, '\\*')
-    .replace(/_/g, '\\_')
-    .replace(/\[/g, '\\[')
-    .replace(/\]/g, '\\]')
-    .replace(/\(/g, '\\(')
-    .replace(/\)/g, '\\)')
-    .replace(/~/g, '\\~')
-    .replace(/`/g, '\\`')
-    .replace(/>/g, '\\>')
-    .replace(/#/g, '\\#')
-    .replace(/\+/g, '\\+')
-    .replace(/-/g, '\\-')
-    .replace(/=/g, '\\=')
-    .replace(/\|/g, '\\|')
-    .replace(/\{/g, '\\{')
-    .replace(/\}/g, '\\}')
-    .replace(/\./g, '\\.')
-    .replace(/!/g, '\\!');
-}
-
 class WebhookService {
   constructor() {
     this.isRunning = false;
     this.interval = null;
     this.db = null;
     this.telegramBotToken = process.env.TELEGRAM_BOT_TOKEN;
-    this.processInterval = 10000; // Check every 10 seconds
+    this.processInterval = 5000; // Check every 5 seconds for faster updates
+    this.activeCallStatus = new Map(); // Track call status to avoid duplicate messages
   }
 
   start(database) {
@@ -65,15 +41,14 @@ class WebhookService {
       this.interval = null;
     }
     this.isRunning = false;
+    this.activeCallStatus.clear();
     console.log('Webhook service stopped'.yellow);
   }
 
   async processNotifications() {
     if (!this.db || !this.telegramBotToken) return;
 
-    // Check if database is properly initialized
     if (!this.db.isInitialized) {
-      console.log('Database not yet initialized, skipping notification processing...');
       return;
     }
 
@@ -81,8 +56,6 @@ class WebhookService {
       const notifications = await this.db.getPendingWebhookNotifications();
       
       if (notifications.length === 0) return;
-
-      console.log(`Processing ${notifications.length} pending notifications`.blue);
 
       for (const notification of notifications) {
         try {
@@ -96,125 +69,177 @@ class WebhookService {
     }
   }
 
+  // Main method to send professional status updates
+  async sendCallStatusUpdate(call_sid, status, telegram_chat_id, additionalData = {}) {
+    try {
+      // Prevent duplicate status messages
+      const statusKey = `${call_sid}_${status}`;
+      if (this.activeCallStatus.has(statusKey)) {
+        return;
+      }
+      this.activeCallStatus.set(statusKey, true);
+
+      let message = '';
+      
+      switch (status.toLowerCase()) {
+        case 'queued':
+        case 'initiated':
+          message = '📞 Calling...';
+          break;
+        case 'ringing':
+          message = '🔔 Ringing...';
+          break;
+        case 'in-progress':
+        case 'answered':
+          message = '✅ Answered...';
+          break;
+        case 'completed':
+          message = '🔄 Completed...';
+          break;
+        case 'busy':
+          message = '📵 Busy';
+          break;
+        case 'no-answer':
+          message = '❌ No Answer';
+          break;
+        case 'failed':
+          message = '❌ Failed';
+          break;
+        case 'canceled':
+          message = '🚫 Canceled';
+          break;
+        default:
+          message = `📱 ${status}`;
+      }
+
+      await this.sendTelegramMessage(telegram_chat_id, message);
+      console.log(`✅ Sent ${status} update for call ${call_sid}`.green);
+
+      // Clean up old status after completion
+      if (['completed', 'failed', 'no-answer', 'busy', 'canceled'].includes(status.toLowerCase())) {
+        setTimeout(() => {
+          // Clean up all statuses for this call after 1 minute
+          for (const key of this.activeCallStatus.keys()) {
+            if (key.startsWith(call_sid)) {
+              this.activeCallStatus.delete(key);
+            }
+          }
+        }, 60000);
+      }
+
+      return true;
+    } catch (error) {
+      console.error('Failed to send call status update:', error);
+      return false;
+    }
+  }
+
+  // Send call transcript in clean format
+  async sendCallTranscript(call_sid, telegram_chat_id) {
+    try {
+      const callDetails = await this.db.getCall(call_sid);
+      const transcripts = await this.db.getCallTranscripts(call_sid);
+      
+      if (!callDetails || !transcripts || transcripts.length === 0) {
+        await this.sendTelegramMessage(telegram_chat_id, '❌ No transcript available');
+        return;
+      }
+
+      // Simple, clean transcript format
+      let message = `📋 Call Transcript\n\n`;
+      
+      // Add essential call info
+      message += `📞 ${callDetails.phone_number}\n`;
+      if (callDetails.duration) {
+        const minutes = Math.floor(callDetails.duration / 60);
+        const seconds = callDetails.duration % 60;
+        message += `⏱️ ${minutes}:${String(seconds).padStart(2, '0')}\n`;
+      }
+      message += `💬 ${transcripts.length} messages\n\n`;
+
+      // Add conversation - limit to prevent long messages
+      const maxMessages = 8;
+      for (let i = 0; i < Math.min(transcripts.length, maxMessages); i++) {
+        const t = transcripts[i];
+        const speaker = t.speaker === 'user' ? '👤' : '🤖';
+        message += `${speaker} ${t.message}\n\n`;
+      }
+
+      if (transcripts.length > maxMessages) {
+        message += `... and ${transcripts.length - maxMessages} more messages\n\n`;
+        message += `Use /transcript ${call_sid} for full details`;
+      }
+
+      // Split message if too long
+      if (message.length > 4000) {
+        const chunks = this.splitMessage(message, 3800);
+        for (let i = 0; i < chunks.length; i++) {
+          await this.sendTelegramMessage(telegram_chat_id, chunks[i]);
+          if (i < chunks.length - 1) {
+            await this.delay(1000); // 1 second delay between chunks
+          }
+        }
+      } else {
+        await this.sendTelegramMessage(telegram_chat_id, message);
+      }
+
+      console.log(`✅ Sent transcript for call ${call_sid}`.green);
+      return true;
+    } catch (error) {
+      console.error('Failed to send call transcript:', error);
+      await this.sendTelegramMessage(telegram_chat_id, '❌ Error retrieving transcript');
+      return false;
+    }
+  }
+
   async sendNotification(notification) {
-    const { id, call_sid, notification_type, telegram_chat_id, phone_number, call_summary, ai_analysis } = notification;
+    const { id, call_sid, notification_type, telegram_chat_id, phone_number } = notification;
 
     try {
-      let message = '';
-      let parseMode = 'Markdown';
+      let success = false;
 
       switch (notification_type) {
         case 'call_initiated':
-          message = this.formatCallInitiatedMessage(call_sid, phone_number);
+          success = await this.sendCallStatusUpdate(call_sid, 'initiated', telegram_chat_id);
+          break;
+        case 'call_ringing':
+          success = await this.sendCallStatusUpdate(call_sid, 'ringing', telegram_chat_id);
+          break;
+        case 'call_answered':
+          success = await this.sendCallStatusUpdate(call_sid, 'answered', telegram_chat_id);
           break;
         case 'call_completed':
-          message = this.formatCallCompletedMessage(call_sid, phone_number, call_summary, ai_analysis);
+          success = await this.sendCallStatusUpdate(call_sid, 'completed', telegram_chat_id);
           break;
-        case 'call_summary':
-          // For call_summary, use plain text to avoid parsing issues
-          message = await this.formatCallSummaryMessage(call_sid, phone_number);
-          parseMode = null; // Send as plain text
+        case 'call_transcript':
+          success = await this.sendCallTranscript(call_sid, telegram_chat_id);
+          break;
+        case 'call_failed':
+          success = await this.sendCallStatusUpdate(call_sid, 'failed', telegram_chat_id);
+          break;
+        case 'call_busy':
+          success = await this.sendCallStatusUpdate(call_sid, 'busy', telegram_chat_id);
+          break;
+        case 'call_no_answer':
+          success = await this.sendCallStatusUpdate(call_sid, 'no-answer', telegram_chat_id);
           break;
         default:
           throw new Error(`Unknown notification type: ${notification_type}`);
       }
 
-      // Send to Telegram
-      await this.sendTelegramMessage(telegram_chat_id, message, parseMode);
-
-      // Mark as sent
-      await this.db.updateWebhookNotification(id, 'sent', null, new Date().toISOString());
-      
-      console.log(`✅ Sent ${notification_type} notification for call ${call_sid}`.green);
+      if (success) {
+        await this.db.updateWebhookNotification(id, 'sent', null, new Date().toISOString());
+      } else {
+        throw new Error('Failed to send notification');
+      }
 
     } catch (error) {
       console.error(`❌ Failed to send notification ${id}:`, error.message);
-      
-      // Mark as failed
       await this.db.updateWebhookNotification(id, 'failed', error.message, null);
     }
   }
 
-  formatCallInitiatedMessage(call_sid, phone_number) {
-    return `🔔 *Call Initiated*\n\n` +
-           `📞 Number: ${escapeMarkdown(phone_number)}\n` +
-           `🆔 Call ID: \`${call_sid}\`\n` +
-           `⏰ Time: ${escapeMarkdown(new Date().toLocaleString())}\n\n` +
-           `*Status: Connecting\\.\\.\\.*`;
-  }
-
-  formatCallCompletedMessage(call_sid, phone_number, call_summary, ai_analysis) {
-    let analysis = {};
-    try {
-      analysis = JSON.parse(ai_analysis || '{}');
-    } catch (e) {
-      analysis = {};
-    }
-
-    const duration = analysis.duration_seconds ? 
-      `${Math.floor(analysis.duration_seconds / 60)}:${String(analysis.duration_seconds % 60).padStart(2, '0')}` : 
-      'Unknown';
-
-    return `✅ *Call Completed*\n\n` +
-           `📞 Number: ${escapeMarkdown(phone_number)}\n` +
-           `🆔 Call ID: \`${call_sid}\`\n` +
-           `⏱️ Duration: ${duration}\n` +
-           `💬 Messages: ${analysis.total_messages || 0}\n` +
-           `🔄 Turns: ${analysis.conversation_turns || 0}\n\n` +
-           `📝 *Summary:*\n${escapeMarkdown(call_summary || 'No summary available')}\n\n` +
-           `Use /transcript ${call_sid} to get full transcript`;
-  }
-
-  async formatCallSummaryMessage(call_sid, phone_number) {
-    try {
-      // Get full transcripts for detailed summary
-      const transcripts = await this.db.getCallTranscripts(call_sid);
-      
-      if (!transcripts || transcripts.length === 0) {
-        return `📋 CALL TRANSCRIPT\n\n` +
-               `📞 Number: ${phone_number}\n` +
-               `🆔 Call ID: ${call_sid}\n\n` +
-               `❌ No transcript available`;
-      }
-
-      let transcriptText = `📋 CALL TRANSCRIPT\n\n`;
-      transcriptText += `📞 Number: ${phone_number}\n`;
-      transcriptText += `🆔 Call ID: ${call_sid}\n`;
-      transcriptText += `💬 Total Messages: ${transcripts.length}\n\n`;
-      transcriptText += `CONVERSATION:\n\n`;
-
-      // Format transcript without markdown - use plain text
-      for (let i = 0; i < Math.min(transcripts.length, 15); i++) { // Limit to first 15 messages
-        const t = transcripts[i];
-        const speaker = t.speaker === 'user' ? '👤 USER' : '🤖 AI';
-        const time = new Date(t.timestamp).toLocaleTimeString();
-        
-        transcriptText += `${speaker} (${time}):\n`;
-        transcriptText += `${t.message}\n\n`;
-      }
-
-      if (transcripts.length > 15) {
-        transcriptText += `... and ${transcripts.length - 15} more messages\n\n`;
-        transcriptText += `Use /fullTranscript ${call_sid} for complete transcript`;
-      }
-
-      // Telegram message limit is 4096 characters
-      if (transcriptText.length > 4000) {
-        transcriptText = transcriptText.substring(0, 3900) + '\n\n... (truncated)\n\nUse /fullTranscript for complete transcript';
-      }
-
-      return transcriptText;
-
-    } catch (error) {
-      console.error('Error formatting call summary:', error);
-      return `📋 CALL SUMMARY\n\n` +
-             `📞 Number: ${phone_number}\n` +
-             `🆔 Call ID: ${call_sid}\n\n` +
-             `❌ Error generating summary: ${error.message}`;
-    }
-  }
-
-  async sendTelegramMessage(chatId, message, parseMode = 'Markdown') {
+  async sendTelegramMessage(chatId, message) {
     const url = `https://api.telegram.org/bot${this.telegramBotToken}/sendMessage`;
     
     const payload = {
@@ -223,26 +248,12 @@ class WebhookService {
       disable_web_page_preview: true
     };
 
-    // Only add parse_mode if it's specified
-    if (parseMode) {
-      payload.parse_mode = parseMode;
-    }
-
-    console.log('Sending to Telegram:', {
-      url: url,
-      chat_id: chatId,
-      message_length: message.length,
-      parse_mode: parseMode || 'none'
-    });
-
     const response = await axios.post(url, payload, {
       timeout: 10000,
       headers: {
         'Content-Type': 'application/json'
       }
     });
-
-    console.log('Telegram response:', response.data);
 
     if (!response.data.ok) {
       throw new Error(`Telegram API error: ${response.data.description}`);
@@ -251,31 +262,33 @@ class WebhookService {
     return response.data;
   }
 
-  // Method to send immediate notification (not queued)
-  async sendImmediateNotification(call_sid, notification_type, telegram_chat_id, additionalData = {}) {
-    try {
-      const callDetails = await this.db.getCall(call_sid);
-      if (!callDetails) {
-        throw new Error('Call not found');
-      }
-
-      const notification = {
-        id: Date.now(), // Temporary ID
-        call_sid,
-        notification_type,
-        telegram_chat_id,
-        phone_number: callDetails.phone_number,
-        call_summary: callDetails.call_summary,
-        ai_analysis: callDetails.ai_analysis,
-        ...additionalData
-      };
-
-      await this.sendNotification(notification);
-      return true;
-    } catch (error) {
-      console.error('Failed to send immediate notification:', error);
-      return false;
+  // Utility methods
+  splitMessage(message, maxLength) {
+    const chunks = [];
+    let currentChunk = message;
+    
+    while (currentChunk.length > maxLength) {
+      let splitIndex = currentChunk.lastIndexOf('\n', maxLength);
+      if (splitIndex === -1) splitIndex = maxLength;
+      
+      chunks.push(currentChunk.substring(0, splitIndex));
+      currentChunk = currentChunk.substring(splitIndex);
     }
+    
+    if (currentChunk.length > 0) {
+      chunks.push(currentChunk);
+    }
+    
+    return chunks;
+  }
+
+  delay(ms) {
+    return new Promise(resolve => setTimeout(resolve, ms));
+  }
+
+  // Method to send immediate status update (not queued)
+  async sendImmediateStatus(call_sid, status, telegram_chat_id) {
+    return await this.sendCallStatusUpdate(call_sid, status, telegram_chat_id);
   }
 
   // Health check method
@@ -295,7 +308,8 @@ class WebhookService {
             username: response.data.result.username,
             first_name: response.data.result.first_name
           },
-          is_running: this.isRunning
+          is_running: this.isRunning,
+          active_calls: this.activeCallStatus.size
         };
       } else {
         return { status: 'error', reason: 'Telegram API returned error' };
