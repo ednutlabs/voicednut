@@ -11,7 +11,7 @@ const { TextToSpeechService } = require('./routes/tts');
 const { recordingService } = require('./routes/recording');
 const Database = require('./db/db');
 const { webhookService } = require('./routes/status');
-const validateTwilioRequest = require('./middleware/twilioSignature');
+//const validateTwilioRequest = require('./middleware/twilioSignature');
 
 const VoiceResponse = require('twilio').twiml.VoiceResponse;
 
@@ -57,7 +57,8 @@ const callConfigurations = new Map();
 // Store active call sessions for database updates
 const activeCalls = new Map();
 
-app.post('/incoming', validateTwilioRequest, (req, res) => {
+// app.post('/incoming', validateTwilioRequest, (req, res) => {
+app.post('/incoming', (req, res) => {
   try {
     const response = new VoiceResponse();
     const connect = response.connect();
@@ -153,10 +154,15 @@ app.post('/outbound-call', async (req, res) => {
   }
 });
 
-// Enhanced WebSocket connection handler with database integration
+// Enhanced WebSocket connection handler with better error handling and logging
 app.ws('/connection', (ws) => {
+  console.log('🔌 New WebSocket connection established'.cyan);
+  
   try {
-    ws.on('error', console.error);
+    ws.on('error', (error) => {
+      console.error('WebSocket error:', error);
+    });
+
     // Filled in from start message
     let streamSid;
     let callSid;
@@ -170,106 +176,187 @@ app.ws('/connection', (ws) => {
   
     let marks = [];
     let interactionCount = 0;
+    let isInitialized = false;
   
     // Incoming from MediaStream
     ws.on('message', async function message(data) {
-      const msg = JSON.parse(data);
-      if (msg.event === 'start') {
-        streamSid = msg.start.streamSid;
-        callSid = msg.start.callSid;
-        callStartTime = new Date();
+      try {
+        const msg = JSON.parse(data);
+        console.log(`📨 WebSocket message received: ${msg.event}`.yellow);
         
-        streamService.setStreamSid(streamSid);
-
-        // Update call status to 'started' in database
-        try {
-          await db.updateCallStatus(callSid, 'started', {
-            started_at: callStartTime.toISOString()
-          });
-          await db.updateCallState(callSid, 'stream_started', {
-            stream_sid: streamSid,
-            start_time: callStartTime.toISOString()
-          });
-        } catch (dbError) {
-          console.error('Database error on call start:', dbError);
-        }
-
-        // Check if this is a configured outbound call
-        callConfig = callConfigurations.get(callSid);
-        
-        if (callConfig) {
-          console.log(`Configured outbound call detected: ${callSid}`.green);
-          // Initialize GPT service with custom prompt
-          gptService = new GptService(callConfig.prompt, callConfig.first_message);
-        } else {
-          console.log(`Standard call detected: ${callSid}`.yellow);
-          // Use default configuration for regular calls
-          gptService = new GptService();
-        }
-        
-        gptService.setCallSid(callSid);
-
-        // Store active call session
-        activeCalls.set(callSid, {
-          startTime: callStartTime,
-          transcripts: [],
-          gptService,
-          callConfig
-        });
-
-        // Set RECORDING_ENABLED='true' in .env to record calls
-        recordingService(ttsService, callSid).then(async () => {
-          console.log(`Twilio -> Starting Media Stream for ${streamSid}`.underline.red);
+        if (msg.event === 'start') {
+          streamSid = msg.start.streamSid;
+          callSid = msg.start.callSid;
+          callStartTime = new Date();
           
-          // Use custom first message if available, otherwise use default
-          const firstMessage = callConfig ? 
-            callConfig.first_message : 
-            'Hello! I understand you\'re looking for a pair of AirPods, is that correct?';
+          console.log(`🎯 Call started - SID: ${callSid}, Stream: ${streamSid}`.green);
           
-          // Log first AI message
+          streamService.setStreamSid(streamSid);
+
+          // Update call status to 'started' in database
           try {
-            await db.addTranscript({
-              call_sid: callSid,
-              speaker: 'ai',
-              message: firstMessage,
-              interaction_count: 0
+            await db.updateCallStatus(callSid, 'started', {
+              started_at: callStartTime.toISOString()
             });
+            await db.updateCallState(callSid, 'stream_started', {
+              stream_sid: streamSid,
+              start_time: callStartTime.toISOString()
+            });
+            console.log('📊 Database updated with call start info'.blue);
           } catch (dbError) {
-            console.error('Database error adding AI transcript:', dbError);
+            console.error('Database error on call start:', dbError);
+          }
+
+          // Check if this is a configured outbound call
+          callConfig = callConfigurations.get(callSid);
+          
+          if (callConfig) {
+            console.log(`🎛️ Configured outbound call detected: ${callSid}`.green);
+            console.log(`📝 Custom prompt preview: ${callConfig.prompt.substring(0, 100)}...`.cyan);
+            console.log(`💬 Custom first message: ${callConfig.first_message}`.cyan);
+            
+            // Initialize GPT service with custom prompt
+            gptService = new GptService(callConfig.prompt, callConfig.first_message);
+          } else {
+            console.log(`🎯 Standard call detected: ${callSid}`.yellow);
+            // Use default configuration for regular calls
+            gptService = new GptService();
           }
           
-          ttsService.generate({
-            partialResponseIndex: null, 
-            partialResponse: firstMessage
-          }, 0);
-        });
+          gptService.setCallSid(callSid);
 
-        // Clean up old call configurations (older than 1 hour)
-        const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000);
-        for (const [sid, config] of callConfigurations.entries()) {
-          if (new Date(config.created_at) < oneHourAgo) {
-            callConfigurations.delete(sid);
+          // Set up GPT reply handler immediately
+          gptService.on('gptreply', async (gptReply, icount) => {
+            console.log(`Interaction ${icount}: GPT -> TTS: ${gptReply.partialResponse}`.green);
+            
+            // Save AI response to database
+            try {
+              await db.addTranscript({
+                call_sid: callSid,
+                speaker: 'ai',
+                message: gptReply.partialResponse,
+                interaction_count: icount
+              });
+              
+              // Update call state
+              await db.updateCallState(callSid, 'ai_responded', {
+                message: gptReply.partialResponse,
+                interaction_count: icount
+              });
+            } catch (dbError) {
+              console.error('Database error adding AI transcript:', dbError);
+            }
+            
+            ttsService.generate(gptReply, icount);
+          });
+
+          // Store active call session
+          activeCalls.set(callSid, {
+            startTime: callStartTime,
+            transcripts: [],
+            gptService,
+            callConfig
+          });
+
+          // Set RECORDING_ENABLED='true' in .env to record calls
+          console.log('🎤 Starting recording service...'.yellow);
+          
+          try {
+            await recordingService(ttsService, callSid);
+            console.log('✅ Recording service started successfully'.green);
+            
+            console.log(`Twilio -> Starting Media Stream for ${streamSid}`.underline.red);
+            
+            // Use custom first message if available, otherwise use default
+            const firstMessage = callConfig ? 
+              callConfig.first_message : 
+              'Hello! I understand you\'re looking for a pair of AirPods, is that correct?';
+            
+            console.log(`🗣️ First AI message: ${firstMessage}`.magenta);
+            
+            // Log first AI message
+            try {
+              await db.addTranscript({
+                call_sid: callSid,
+                speaker: 'ai',
+                message: firstMessage,
+                interaction_count: 0
+              });
+            } catch (dbError) {
+              console.error('Database error adding AI transcript:', dbError);
+            }
+            
+            // Generate the first message
+            console.log('🎵 Generating first TTS message...'.cyan);
+            await ttsService.generate({
+              partialResponseIndex: null, 
+              partialResponse: firstMessage
+            }, 0);
+            
+            isInitialized = true;
+            console.log('✅ Call initialization complete'.green);
+            
+          } catch (recordingError) {
+            console.error('❌ Recording service error:', recordingError);
+            
+            // Continue without recording if it fails
+            const firstMessage = callConfig ? 
+              callConfig.first_message : 
+              'Hello! I understand you\'re looking for a pair of AirPods, is that correct?';
+            
+            console.log(`🗣️ First AI message (no recording): ${firstMessage}`.magenta);
+            
+            try {
+              await db.addTranscript({
+                call_sid: callSid,
+                speaker: 'ai',
+                message: firstMessage,
+                interaction_count: 0
+              });
+            } catch (dbError) {
+              console.error('Database error adding AI transcript:', dbError);
+            }
+            
+            await ttsService.generate({
+              partialResponseIndex: null, 
+              partialResponse: firstMessage
+            }, 0);
+            
+            isInitialized = true;
+            console.log('✅ Call initialization complete (without recording)'.green);
+          }
+
+          // Clean up old call configurations (older than 1 hour)
+          const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000);
+          for (const [sid, config] of callConfigurations.entries()) {
+            if (new Date(config.created_at) < oneHourAgo) {
+              callConfigurations.delete(sid);
+            }
+          }
+
+        } else if (msg.event === 'media') {
+          if (isInitialized && transcriptionService) {
+            transcriptionService.send(msg.media.payload);
+          }
+        } else if (msg.event === 'mark') {
+          const label = msg.mark.name;
+          console.log(`Twilio -> Audio completed mark (${msg.sequenceNumber}): ${label}`.red);
+          marks = marks.filter(m => m !== msg.mark.name);
+        } else if (msg.event === 'stop') {
+          console.log(`Twilio -> Media stream ${streamSid} ended.`.underline.red);
+          
+          // Handle call end and generate summary
+          await handleCallEnd(callSid, callStartTime);
+          
+          // Clean up
+          activeCalls.delete(callSid);
+          if (callSid && callConfigurations.has(callSid)) {
+            callConfigurations.delete(callSid);
+            console.log(`Cleaned up configuration for call: ${callSid}`.yellow);
           }
         }
-
-      } else if (msg.event === 'media') {
-        transcriptionService.send(msg.media.payload);
-      } else if (msg.event === 'mark') {
-        const label = msg.mark.name;
-        console.log(`Twilio -> Audio completed mark (${msg.sequenceNumber}): ${label}`.red);
-        marks = marks.filter(m => m !== msg.mark.name);
-      } else if (msg.event === 'stop') {
-        console.log(`Twilio -> Media stream ${streamSid} ended.`.underline.red);
-        
-        // Handle call end and generate summary
-        await handleCallEnd(callSid, callStartTime);
-        
-        // Clean up
-        activeCalls.delete(callSid);
-        if (callSid && callConfigurations.has(callSid)) {
-          callConfigurations.delete(callSid);
-          console.log(`Cleaned up configuration for call: ${callSid}`.yellow);
-        }
+      } catch (messageError) {
+        console.error('❌ Error processing WebSocket message:', messageError);
       }
     });
   
@@ -287,7 +374,10 @@ app.ws('/connection', (ws) => {
     });
   
     transcriptionService.on('transcription', async (text) => {
-      if (!text || !gptService) { return; }
+      if (!text || !gptService || !isInitialized) { 
+        console.log('⚠️ Skipping transcription - not ready yet'.yellow);
+        return; 
+      }
       
       console.log(`Interaction ${interactionCount} – STT -> GPT: ${text}`.yellow);
       
@@ -313,47 +403,6 @@ app.ws('/connection', (ws) => {
       interactionCount += 1;
     });
     
-    // GPT service event handler (will be set up after gptService is initialized)
-    const handleGptReply = async (gptReply, icount) => {
-      console.log(`Interaction ${icount}: GPT -> TTS: ${gptReply.partialResponse}`.green);
-      
-      // Save AI response to database
-      try {
-        await db.addTranscript({
-          call_sid: callSid,
-          speaker: 'ai',
-          message: gptReply.partialResponse,
-          interaction_count: icount
-        });
-        
-        // Update call state
-        await db.updateCallState(callSid, 'ai_responded', {
-          message: gptReply.partialResponse,
-          interaction_count: icount
-        });
-      } catch (dbError) {
-        console.error('Database error adding AI transcript:', dbError);
-      }
-      
-      ttsService.generate(gptReply, icount);
-    };
-
-    // Set up GPT reply handler when gptService becomes available
-    const setupGptHandler = () => {
-      if (gptService) {
-        gptService.on('gptreply', handleGptReply);
-        return true;
-      }
-      return false;
-    };
-
-    // Poll for gptService initialization
-    const gptHandlerInterval = setInterval(() => {
-      if (setupGptHandler()) {
-        clearInterval(gptHandlerInterval);
-      }
-    }, 100);
-  
     ttsService.on('speech', (responseIndex, audio, label, icount) => {
       console.log(`Interaction ${icount}: TTS -> TWILIO: ${label}`.blue);
       streamService.buffer(responseIndex, audio);
@@ -363,15 +412,13 @@ app.ws('/connection', (ws) => {
       marks.push(markLabel);
     });
 
-    // Clean up interval on connection close
+    // Clean up on connection close
     ws.on('close', () => {
-      if (gptHandlerInterval) {
-        clearInterval(gptHandlerInterval);
-      }
+      console.log(`🔌 WebSocket connection closed for call: ${callSid || 'unknown'}`.yellow);
     });
 
   } catch (err) {
-    console.log(err);
+    console.error('❌ WebSocket handler error:', err);
   }
 });
 

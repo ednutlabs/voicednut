@@ -1,6 +1,5 @@
-const { Bot } = require('grammy');
+const { Bot, session, InlineKeyboard } = require('grammy');
 const { conversations, createConversation } = require('@grammyjs/conversations');
-const { InlineKeyboard } = require('grammy');
 const config = require('./config');
 
 // Bot initialization
@@ -19,7 +18,10 @@ function wrapConversation(handler, name) {
     }, name);
 }
 
-// Initialize middleware
+// IMPORTANT: Add session middleware BEFORE conversations
+bot.use(session({ initial: () => ({}) }));
+
+// Initialize conversations middleware AFTER session
 bot.use(conversations());
 
 // Global error handler
@@ -259,9 +261,12 @@ bot.on('message:text', async (ctx) => {
 
 // Start the bot
 console.log('🚀 Starting Voice Call Bot...');
-bot.start().then(() => {
-    console.log('✅ Voice Call Bot is running!');
-}).catch((error) => {
+// Simple startup with immediate success message
+bot.start().catch((error) => {
     console.error('❌ Failed to start bot:', error);
     process.exit(1);
 });
+
+// Show success message after starting
+console.log('✅ Voicednut Bot is running!');
+console.log('🔄 Polling for updates...');

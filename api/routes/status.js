@@ -1,5 +1,29 @@
-// api/services/webhook-service.js
 const axios = require('axios');
+
+// Function to escape Telegram Markdown special characters
+function escapeMarkdown(text) {
+  if (!text) return '';
+  return text
+    .replace(/\\/g, '\\\\')
+    .replace(/\*/g, '\\*')
+    .replace(/_/g, '\\_')
+    .replace(/\[/g, '\\[')
+    .replace(/\]/g, '\\]')
+    .replace(/\(/g, '\\(')
+    .replace(/\)/g, '\\)')
+    .replace(/~/g, '\\~')
+    .replace(/`/g, '\\`')
+    .replace(/>/g, '\\>')
+    .replace(/#/g, '\\#')
+    .replace(/\+/g, '\\+')
+    .replace(/-/g, '\\-')
+    .replace(/=/g, '\\=')
+    .replace(/\|/g, '\\|')
+    .replace(/\{/g, '\\{')
+    .replace(/\}/g, '\\}')
+    .replace(/\./g, '\\.')
+    .replace(/!/g, '\\!');
+}
 
 class WebhookService {
   constructor() {
@@ -87,7 +111,9 @@ class WebhookService {
           message = this.formatCallCompletedMessage(call_sid, phone_number, call_summary, ai_analysis);
           break;
         case 'call_summary':
+          // For call_summary, use plain text to avoid parsing issues
           message = await this.formatCallSummaryMessage(call_sid, phone_number);
+          parseMode = null; // Send as plain text
           break;
         default:
           throw new Error(`Unknown notification type: ${notification_type}`);
@@ -111,10 +137,10 @@ class WebhookService {
 
   formatCallInitiatedMessage(call_sid, phone_number) {
     return `🔔 *Call Initiated*\n\n` +
-           `📞 Number: ${phone_number}\n` +
+           `📞 Number: ${escapeMarkdown(phone_number)}\n` +
            `🆔 Call ID: \`${call_sid}\`\n` +
-           `⏰ Time: ${new Date().toLocaleString()}\n\n` +
-           `*Status: Connecting...*`;
+           `⏰ Time: ${escapeMarkdown(new Date().toLocaleString())}\n\n` +
+           `*Status: Connecting\\.\\.\\.*`;
   }
 
   formatCallCompletedMessage(call_sid, phone_number, call_summary, ai_analysis) {
@@ -130,12 +156,12 @@ class WebhookService {
       'Unknown';
 
     return `✅ *Call Completed*\n\n` +
-           `📞 Number: ${phone_number}\n` +
+           `📞 Number: ${escapeMarkdown(phone_number)}\n` +
            `🆔 Call ID: \`${call_sid}\`\n` +
            `⏱️ Duration: ${duration}\n` +
            `💬 Messages: ${analysis.total_messages || 0}\n` +
            `🔄 Turns: ${analysis.conversation_turns || 0}\n\n` +
-           `📝 *Summary:*\n${call_summary || 'No summary available'}\n\n` +
+           `📝 *Summary:*\n${escapeMarkdown(call_summary || 'No summary available')}\n\n` +
            `Use /transcript ${call_sid} to get full transcript`;
   }
 
@@ -145,30 +171,30 @@ class WebhookService {
       const transcripts = await this.db.getCallTranscripts(call_sid);
       
       if (!transcripts || transcripts.length === 0) {
-        return `📋 *Call Transcript*\n\n` +
+        return `📋 CALL TRANSCRIPT\n\n` +
                `📞 Number: ${phone_number}\n` +
-               `🆔 Call ID: \`${call_sid}\`\n\n` +
+               `🆔 Call ID: ${call_sid}\n\n` +
                `❌ No transcript available`;
       }
 
-      let transcriptText = `📋 *Call Transcript*\n\n`;
+      let transcriptText = `📋 CALL TRANSCRIPT\n\n`;
       transcriptText += `📞 Number: ${phone_number}\n`;
-      transcriptText += `🆔 Call ID: \`${call_sid}\`\n`;
+      transcriptText += `🆔 Call ID: ${call_sid}\n`;
       transcriptText += `💬 Total Messages: ${transcripts.length}\n\n`;
-      transcriptText += `*Conversation:*\n\n`;
+      transcriptText += `CONVERSATION:\n\n`;
 
-      // Format transcript with speaker labels
-      for (let i = 0; i < Math.min(transcripts.length, 20); i++) { // Limit to first 20 messages
+      // Format transcript without markdown - use plain text
+      for (let i = 0; i < Math.min(transcripts.length, 15); i++) { // Limit to first 15 messages
         const t = transcripts[i];
-        const speaker = t.speaker === 'user' ? '👤 User' : '🤖 AI';
+        const speaker = t.speaker === 'user' ? '👤 USER' : '🤖 AI';
         const time = new Date(t.timestamp).toLocaleTimeString();
         
         transcriptText += `${speaker} (${time}):\n`;
-        transcriptText += `_${t.message}_\n\n`;
+        transcriptText += `${t.message}\n\n`;
       }
 
-      if (transcripts.length > 20) {
-        transcriptText += `... and ${transcripts.length - 20} more messages\n\n`;
+      if (transcripts.length > 15) {
+        transcriptText += `... and ${transcripts.length - 15} more messages\n\n`;
         transcriptText += `Use /fullTranscript ${call_sid} for complete transcript`;
       }
 
@@ -181,9 +207,9 @@ class WebhookService {
 
     } catch (error) {
       console.error('Error formatting call summary:', error);
-      return `📋 *Call Summary*\n\n` +
+      return `📋 CALL SUMMARY\n\n` +
              `📞 Number: ${phone_number}\n` +
-             `🆔 Call ID: \`${call_sid}\`\n\n` +
+             `🆔 Call ID: ${call_sid}\n\n` +
              `❌ Error generating summary: ${error.message}`;
     }
   }
@@ -194,9 +220,20 @@ class WebhookService {
     const payload = {
       chat_id: chatId,
       text: message,
-      parse_mode: parseMode,
       disable_web_page_preview: true
     };
+
+    // Only add parse_mode if it's specified
+    if (parseMode) {
+      payload.parse_mode = parseMode;
+    }
+
+    console.log('Sending to Telegram:', {
+      url: url,
+      chat_id: chatId,
+      message_length: message.length,
+      parse_mode: parseMode || 'none'
+    });
 
     const response = await axios.post(url, payload, {
       timeout: 10000,
@@ -204,6 +241,8 @@ class WebhookService {
         'Content-Type': 'application/json'
       }
     });
+
+    console.log('Telegram response:', response.data);
 
     if (!response.data.ok) {
       throw new Error(`Telegram API error: ${response.data.description}`);
