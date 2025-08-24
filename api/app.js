@@ -37,23 +37,24 @@ async function startServer() {
     console.log('🚀 Initializing Adaptive AI Call System...'.blue);
 
     // Initialize database first
-    console.log('Initializing database...'.yellow);
+    console.log('Initializing enhanced database...'.yellow);
     db = new Database();
     await db.initialize();
-    console.log('✅ Database initialized successfully'.green);
+    console.log('✅ Enhanced database initialized successfully'.green);
 
     // Start webhook service after database is ready
-    console.log('Starting webhook service...'.yellow);
+    console.log('Starting enhanced webhook service...'.yellow);
     webhookService.start(db);
-    console.log('✅ Webhook service started'.green);
+    console.log('✅ Enhanced webhook service started'.green);
 
     // Initialize function engine
     console.log('✅ Dynamic Function Engine ready'.green);
 
     // Start HTTP server
     app.listen(PORT, () => {
-      console.log(`✅ Adaptive API server running on port ${PORT}`.green);
+      console.log(`✅ Enhanced Adaptive API server running on port ${PORT}`.green);
       console.log(`🎭 System ready - Personality Engine & Dynamic Functions active`.green);
+      console.log(`📱 Enhanced webhook notifications enabled`.green);
     });
 
   } catch (error) {
@@ -99,7 +100,7 @@ app.ws('/connection', (ws) => {
           
           streamService.setStreamSid(streamSid);
 
-          // Update database
+          // Update database with enhanced tracking
           try {
             await db.updateCallStatus(callSid, 'started', {
               started_at: callStartTime.toISOString()
@@ -108,6 +109,12 @@ app.ws('/connection', (ws) => {
               stream_sid: streamSid,
               start_time: callStartTime.toISOString()
             });
+            
+            // Create webhook notification for stream start (internal tracking)
+            const call = await db.getCall(callSid);
+            if (call && call.user_chat_id) {
+              await db.createEnhancedWebhookNotification(callSid, 'call_stream_started', call.user_chat_id);
+            }
           } catch (dbError) {
             console.error('Database error on call start:', dbError);
           }
@@ -356,7 +363,7 @@ async function handleCallEnd(callSid, callStartTime) {
       adaptationAnalysis = {
         personalityChanges: conversationAnalysis.personalityChanges,
         finalPersonality: conversationAnalysis.currentPersonality,
-        adaptationEffectiveness: conversationAnalysis.personalityChanges / Math.max(conversationAnalysis.totalInteractions / 10, 1), // Adaptations per 10 interactions
+        adaptationEffectiveness: conversationAnalysis.personalityChanges / Math.max(conversationAnalysis.totalInteractions / 10, 1),
         businessContext: callSession.functionSystem?.context || {}
       };
     }
@@ -377,21 +384,47 @@ async function handleCallEnd(callSid, callStartTime) {
 
     const callDetails = await db.getCall(callSid);
     
-    // Send professional transcript to user with adaptation insights
-    if (callDetails && callDetails.user_chat_id && transcripts.length > 0) {
+    // Create enhanced webhook notification for completion
+    if (callDetails && callDetails.user_chat_id) {
+      await db.createEnhancedWebhookNotification(callSid, 'call_completed', callDetails.user_chat_id);
+      
+      // Schedule transcript notification with delay
       setTimeout(async () => {
-        await webhookService.sendCallTranscript(callSid, callDetails.user_chat_id);
+        try {
+          await db.createEnhancedWebhookNotification(callSid, 'call_transcript', callDetails.user_chat_id);
+        } catch (transcriptError) {
+          console.error('Error creating transcript notification:', transcriptError);
+        }
       }, 2000);
     }
 
-    console.log(`✅ Adaptive call ${callSid} completed`.green);
+    console.log(`✅ Enhanced adaptive call ${callSid} completed`.green);
     console.log(`📊 Duration: ${duration}s | Messages: ${transcripts.length} | Adaptations: ${adaptationAnalysis.personalityChanges || 0}`.cyan);
     if (adaptationAnalysis.finalPersonality) {
       console.log(`🎭 Final personality: ${adaptationAnalysis.finalPersonality}`.magenta);
     }
 
+    // Log service health
+    await db.logServiceHealth('call_system', 'call_completed', {
+      call_sid: callSid,
+      duration: duration,
+      interactions: transcripts.length,
+      adaptations: adaptationAnalysis.personalityChanges || 0
+    });
+
   } catch (error) {
-    console.error('Error handling adaptive call end:', error);
+    console.error('Error handling enhanced adaptive call end:', error);
+    
+    // Log error to service health
+    try {
+      await db.logServiceHealth('call_system', 'error', {
+        operation: 'handle_call_end',
+        call_sid: callSid,
+        error: error.message
+      });
+    } catch (logError) {
+      console.error('Failed to log service health error:', logError);
+    }
   }
 }
 
@@ -414,181 +447,12 @@ function generateCallSummary(transcripts, duration) {
     conversation_turns: Math.max(userMessages.length, aiMessages.length)
   };
 
-  const summary = `Adaptive call completed with ${transcripts.length} messages over ${Math.round(duration/60)} minutes. ` +
+  const summary = `Enhanced adaptive call completed with ${transcripts.length} messages over ${Math.round(duration/60)} minutes. ` +
     `User spoke ${userMessages.length} times, AI responded ${aiMessages.length} times.`;
 
   return { summary, analysis };
 }
 
-// Enhanced API endpoints with adaptation analytics
-
-// Get call details with personality and function analytics
-app.get('/api/calls/:callSid', async (req, res) => {
-  try {
-    const { callSid } = req.params;
-    
-    const call = await db.getCall(callSid);
-    if (!call) {
-      return res.status(404).json({ error: 'Call not found' });
-    }
-
-    const transcripts = await db.getCallTranscripts(callSid);
-    
-    // Parse adaptation data
-    let adaptationData = {};
-    try {
-      if (call.ai_analysis) {
-        const analysis = JSON.parse(call.ai_analysis);
-        adaptationData = analysis.adaptation || {};
-      }
-    } catch (e) {
-      console.error('Error parsing adaptation data:', e);
-    }
-    
-    res.json({
-      call,
-      transcripts,
-      transcript_count: transcripts.length,
-      adaptation_analytics: adaptationData,
-      business_context: call.business_context ? JSON.parse(call.business_context) : null
-    });
-  } catch (error) {
-    console.error('Error fetching adaptive call details:', error);
-    res.status(500).json({ error: 'Failed to fetch call details' });
-  }
-});
-
-// Get adaptation analytics dashboard data
-app.get('/api/analytics/adaptations', async (req, res) => {
-  try {
-    const limit = parseInt(req.query.limit) || 50;
-    const calls = await db.getCallsWithTranscripts(limit);
-    
-    const analyticsData = {
-      total_calls: calls.length,
-      calls_with_adaptations: 0,
-      total_adaptations: 0,
-      personality_usage: {},
-      industry_breakdown: {},
-      adaptation_triggers: {}
-    };
-
-    calls.forEach(call => {
-      try {
-        if (call.ai_analysis) {
-          const analysis = JSON.parse(call.ai_analysis);
-          if (analysis.adaptation && analysis.adaptation.personalityChanges > 0) {
-            analyticsData.calls_with_adaptations++;
-            analyticsData.total_adaptations += analysis.adaptation.personalityChanges;
-            
-            // Track final personality usage
-            const finalPersonality = analysis.adaptation.finalPersonality;
-            if (finalPersonality) {
-              analyticsData.personality_usage[finalPersonality] = 
-                (analyticsData.personality_usage[finalPersonality] || 0) + 1;
-            }
-            
-            // Track industry usage
-            const industry = analysis.adaptation.businessContext?.industry;
-            if (industry) {
-              analyticsData.industry_breakdown[industry] = 
-                (analyticsData.industry_breakdown[industry] || 0) + 1;
-            }
-          }
-        }
-      } catch (e) {
-        // Skip calls with invalid analysis data
-      }
-    });
-
-    analyticsData.adaptation_rate = analyticsData.total_calls > 0 ? 
-      (analyticsData.calls_with_adaptations / analyticsData.total_calls * 100).toFixed(1) : 0;
-    
-    analyticsData.avg_adaptations_per_call = analyticsData.calls_with_adaptations > 0 ? 
-      (analyticsData.total_adaptations / analyticsData.calls_with_adaptations).toFixed(1) : 0;
-
-    res.json(analyticsData);
-  } catch (error) {
-    console.error('Error fetching adaptation analytics:', error);
-    res.status(500).json({ error: 'Failed to fetch analytics' });
-  }
-});
-
-// Generate functions for a given prompt (testing endpoint)
-app.post('/api/generate-functions', async (req, res) => {
-  try {
-    const { prompt, first_message } = req.body;
-    
-    if (!prompt || !first_message) {
-      return res.status(400).json({ error: 'Both prompt and first_message are required' });
-    }
-
-    const functionSystem = functionEngine.generateAdaptiveFunctionSystem(prompt, first_message);
-    
-    res.json({
-      success: true,
-      business_context: functionSystem.context,
-      functions: functionSystem.functions,
-      function_count: functionSystem.functions.length,
-      analysis: functionEngine.getBusinessAnalysis()
-    });
-  } catch (error) {
-    console.error('Error generating functions:', error);
-    res.status(500).json({ error: 'Failed to generate functions' });
-  }
-});
-
-// Enhanced health endpoint with adaptation system status
-app.get('/health', async (req, res) => {
-  try {
-    const calls = await db.getCallsWithTranscripts(1);
-    const webhookHealth = await webhookService.healthCheck();
-    const businessAnalysis = functionEngine.getBusinessAnalysis();
-    
-    res.json({ 
-      status: 'healthy', 
-      timestamp: new Date().toISOString(),
-      active_calls: callConfigurations.size,
-      database_connected: true,
-      recent_calls: calls.length,
-      webhook_service: webhookHealth,
-      adaptation_engine: {
-        available_templates: businessAnalysis.availableTemplates.length,
-        active_function_systems: callFunctionSystems.size
-      }
-    });
-  } catch (error) {
-    res.status(500).json({
-      status: 'unhealthy',
-      timestamp: new Date().toISOString(),
-      database_connected: false,
-      error: error.message
-    });
-  }
-});
-
-startServer();
-
-// Graceful shutdown with cleanup
-process.on('SIGINT', async () => {
-  console.log('\n🛑 Shutting down adaptive system gracefully...'.yellow);
-  webhookService.stop();
-  callConfigurations.clear();
-  callFunctionSystems.clear();
-  await db.close();
-  console.log('✅ Adaptive system shutdown complete'.green);
-  process.exit(0);
-});
-
-process.on('SIGTERM', async () => {
-  console.log('\n🛑 Shutting down adaptive system gracefully...'.yellow);
-  webhookService.stop();
-  callConfigurations.clear();
-  callFunctionSystems.clear();
-  await db.close();
-  console.log('✅ Adaptive system shutdown complete'.green);
-  process.exit(0);
-});
 // Incoming endpoint used by Twilio to connect the call to our websocket stream
 app.post('/incoming', (req, res) => {
   try {
@@ -604,7 +468,7 @@ app.post('/incoming', (req, res) => {
   }
 });
 
-// Outbound call endpoint with dynamic function generation
+// Enhanced outbound call endpoint with dynamic function generation
 app.post('/outbound-call', async (req, res) => {
   try {
     const { number, prompt, first_message, user_chat_id } = req.body;
@@ -675,12 +539,12 @@ app.post('/outbound-call', async (req, res) => {
         generated_functions: JSON.stringify(functionSystem.functions.map(f => f.function.name))
       });
 
-      // Send initial status update
+      // Create initial webhook notification
       if (user_chat_id) {
-        await webhookService.sendImmediateStatus(call.sid, 'initiated', user_chat_id);
+        await db.createEnhancedWebhookNotification(call.sid, 'call_initiated', user_chat_id);
       }
 
-      console.log(`📞 Adaptive call created: ${call.sid} to ${number}`.green);
+      console.log(`📞 Enhanced adaptive call created: ${call.sid} to ${number}`.green);
       console.log(`🎯 Business context: ${functionSystem.context.industry} - ${functionSystem.context.businessType}`.cyan);
       
     } catch (dbError) {
@@ -694,11 +558,12 @@ app.post('/outbound-call', async (req, res) => {
       status: call.status,
       business_context: functionSystem.context,
       generated_functions: functionSystem.functions.length,
-      function_types: functionSystem.functions.map(f => f.function.name)
+      function_types: functionSystem.functions.map(f => f.function.name),
+      enhanced_webhooks: true
     });
 
   } catch (error) {
-    console.error('Error creating adaptive outbound call:', error);
+    console.error('Error creating enhanced adaptive outbound call:', error);
     res.status(500).json({
       error: 'Failed to create outbound call',
       details: error.message
@@ -707,29 +572,692 @@ app.post('/outbound-call', async (req, res) => {
 });
 
 // Enhanced webhook endpoint for call status updates
+
 app.post('/webhook/call-status', async (req, res) => {
   try {
-    const { CallSid, CallStatus, Duration, From, To } = req.body;
+    const { 
+      CallSid, 
+      CallStatus, 
+      Duration, 
+      From, 
+      To, 
+      CallDuration,
+      AnsweredBy,
+      ErrorCode,
+      ErrorMessage,
+      DialCallDuration // This is key for detecting actual answer vs no-answer
+    } = req.body;
     
-    console.log(`📱 Webhook: Call ${CallSid} status: ${CallStatus}`.blue);
+    console.log(`📱 Fixed Webhook: Call ${CallSid} status: ${CallStatus}`.blue);
+    console.log(`📊 Debug Info:`.cyan);
+    console.log(`   Duration: ${Duration || 'N/A'}`);
+    console.log(`   CallDuration: ${CallDuration || 'N/A'}`);
+    console.log(`   DialCallDuration: ${DialCallDuration || 'N/A'}`);
+    console.log(`   AnsweredBy: ${AnsweredBy || 'N/A'}`);
     
-    // Update call status in database
+    // Get call details from database
     const call = await db.getCall(CallSid);
-    if (call) {
-      await db.updateCallStatus(CallSid, CallStatus.toLowerCase(), {
-        duration: Duration ? parseInt(Duration) : null,
-        twilio_status: CallStatus
-      });
+    if (!call) {
+      console.warn(`⚠️ Webhook received for unknown call: ${CallSid}`.yellow);
+      res.status(200).send('OK');
+      return;
+    }
 
-      // Send professional status update to user
-      if (call.user_chat_id) {
-        await webhookService.sendImmediateStatus(CallSid, CallStatus, call.user_chat_id);
+    // Enhanced logic for determining actual call outcome
+    let notificationType = null;
+    let actualStatus = CallStatus.toLowerCase();
+    
+    // Special handling for "completed" status - check if it was actually answered
+    if (actualStatus === 'completed') {
+      const duration = parseInt(Duration || CallDuration || DialCallDuration || 0);
+      
+      console.log(`🔍 Analyzing completed call: Duration = ${duration}s`.yellow);
+      
+      // If call completed but duration is very short (< 3 seconds), it's likely no-answer
+      // or if AnsweredBy is specifically 'machine_start' without actual conversation
+      if (duration === 0 || duration < 3) {
+        console.log(`❌ Short duration detected (${duration}s) - treating as no-answer`.red);
+        actualStatus = 'no-answer';
+        notificationType = 'call_no_answer';
+      } else if (AnsweredBy === 'machine_start' && duration < 10) {
+        console.log(`📞 Voicemail detected with short duration - treating as no-answer`.red);
+        actualStatus = 'no-answer';
+        notificationType = 'call_no_answer';
+      } else {
+        console.log(`✅ Valid call duration (${duration}s) - confirmed answered`.green);
+        actualStatus = 'completed';
+        notificationType = 'call_completed';
+      }
+    } else {
+      // Handle other statuses normally
+      switch (actualStatus) {
+        case 'queued':
+        case 'initiated':
+          notificationType = 'call_initiated';
+          break;
+        case 'ringing':
+          notificationType = 'call_ringing';
+          break;
+        case 'in-progress':
+          notificationType = 'call_answered';
+          break;
+        case 'busy':
+          notificationType = 'call_busy';
+          break;
+        case 'no-answer':
+          notificationType = 'call_no_answer';
+          break;
+        case 'failed':
+          notificationType = 'call_failed';
+          break;
+        case 'canceled':
+          notificationType = 'call_canceled';
+          break;
+        default:
+          console.warn(`⚠️ Unknown call status: ${CallStatus}`.yellow);
+          notificationType = `call_${actualStatus}`;
+      }
+    }
+
+    console.log(`🎯 Final determination: ${CallStatus} → ${actualStatus} → ${notificationType}`.green);
+
+    // Update call status in database with enhanced data
+    const updateData = {
+      duration: parseInt(Duration || CallDuration || DialCallDuration || 0),
+      twilio_status: CallStatus,
+      answered_by: AnsweredBy,
+      error_code: ErrorCode,
+      error_message: ErrorMessage
+    };
+
+    // Calculate ring duration for no-answer cases
+    if (actualStatus === 'no-answer' && call.created_at) {
+      const callStart = new Date(call.created_at);
+      const now = new Date();
+      const ringDuration = Math.round((now - callStart) / 1000);
+      updateData.ring_duration = ringDuration;
+      console.log(`📞 Calculated ring duration: ${ringDuration}s`.cyan);
+    }
+
+    // Set timestamps based on actual status (not original CallStatus)
+    if (actualStatus === 'in-progress' && !call.started_at) {
+      updateData.started_at = new Date().toISOString();
+    } else if (['completed', 'no-answer', 'failed', 'busy', 'canceled'].includes(actualStatus) && !call.ended_at) {
+      updateData.ended_at = new Date().toISOString();
+    }
+
+    await db.updateCallStatus(CallSid, actualStatus, updateData);
+
+    // Create enhanced webhook notification with corrected status
+    if (call.user_chat_id && notificationType) {
+      try {
+        await db.createEnhancedWebhookNotification(CallSid, notificationType, call.user_chat_id);
+        console.log(`📨 Created corrected ${notificationType} notification for call ${CallSid}`.green);
+        
+        // Log the correction if we changed the status
+        if (actualStatus !== CallStatus.toLowerCase()) {
+          await db.logServiceHealth('webhook_system', 'status_corrected', {
+            call_sid: CallSid,
+            original_status: CallStatus,
+            corrected_status: actualStatus,
+            duration: updateData.duration,
+            reason: 'Short duration analysis'
+          });
+        }
+      } catch (notificationError) {
+        console.error('Error creating enhanced webhook notification:', notificationError);
       }
     }
     
+    // Log comprehensive status update
+    console.log(`✅ Fixed webhook processed: ${CallSid} -> ${CallStatus} (corrected to: ${actualStatus})`.green);
+    if (updateData.duration) {
+      const minutes = Math.floor(updateData.duration / 60);
+      const seconds = updateData.duration % 60;
+      console.log(`📊 Call metrics: ${minutes}:${String(seconds).padStart(2, '0')} duration`.cyan);
+    }
+
+    // Log to service health with correction info
+    await db.logServiceHealth('webhook_system', 'status_received', {
+      call_sid: CallSid,
+      original_status: CallStatus,
+      final_status: actualStatus,
+      duration: updateData.duration,
+      answered_by: AnsweredBy,
+      correction_applied: actualStatus !== CallStatus.toLowerCase()
+    });
+    
     res.status(200).send('OK');
+    
   } catch (error) {
-    console.error('Error processing call status webhook:', error);
-    res.status(500).send('Internal Server Error');
+    console.error('❌ Error processing fixed call status webhook:', error);
+    
+    // Log error to service health
+    try {
+      await db.logServiceHealth('webhook_system', 'error', {
+        operation: 'process_webhook',
+        error: error.message,
+        call_sid: req.body.CallSid
+      });
+    } catch (logError) {
+      console.error('Failed to log webhook error:', logError);
+    }
+    
+    res.status(200).send('OK');
   }
+});
+
+
+// Enhanced API endpoints with adaptation analytics
+
+// Get call details with enhanced personality and function analytics
+app.get('/api/calls/:callSid', async (req, res) => {
+  try {
+    const { callSid } = req.params;
+    
+    const call = await db.getCall(callSid);
+    if (!call) {
+      return res.status(404).json({ error: 'Call not found' });
+    }
+
+    const transcripts = await db.getCallTranscripts(callSid);
+    
+    // Parse adaptation data
+    let adaptationData = {};
+    try {
+      if (call.ai_analysis) {
+        const analysis = JSON.parse(call.ai_analysis);
+        adaptationData = analysis.adaptation || {};
+      }
+    } catch (e) {
+      console.error('Error parsing adaptation data:', e);
+    }
+
+    // Get webhook notifications for this call
+    const webhookNotifications = await new Promise((resolve, reject) => {
+      db.db.all(
+        `SELECT * FROM webhook_notifications WHERE call_sid = ? ORDER BY created_at DESC`,
+        [callSid],
+        (err, rows) => {
+          if (err) reject(err);
+          else resolve(rows || []);
+        }
+      );
+    });
+    
+    res.json({
+      call,
+      transcripts,
+      transcript_count: transcripts.length,
+      adaptation_analytics: adaptationData,
+      business_context: call.business_context ? JSON.parse(call.business_context) : null,
+      webhook_notifications: webhookNotifications,
+      enhanced_features: true
+    });
+  } catch (error) {
+    console.error('Error fetching enhanced adaptive call details:', error);
+    res.status(500).json({ error: 'Failed to fetch call details' });
+  }
+});
+
+// Enhanced call status endpoint with real-time metrics
+app.get('/api/calls/:callSid/status', async (req, res) => {
+  try {
+    const { callSid } = req.params;
+    
+    const call = await db.getCall(callSid);
+    if (!call) {
+      return res.status(404).json({ error: 'Call not found' });
+    }
+
+    // Get recent call states for detailed progress tracking
+    const recentStates = await new Promise((resolve, reject) => {
+      db.db.all(
+        `SELECT state, data, timestamp FROM call_states 
+         WHERE call_sid = ? 
+         ORDER BY timestamp DESC 
+         LIMIT 10`,
+        [callSid],
+        (err, rows) => {
+          if (err) reject(err);
+          else resolve(rows || []);
+        }
+      );
+    });
+
+    // Get enhanced webhook notification status
+    const notificationStatus = await new Promise((resolve, reject) => {
+      db.db.all(
+        `SELECT notification_type, status, created_at, sent_at, delivery_time_ms, error_message 
+         FROM webhook_notifications 
+         WHERE call_sid = ? 
+         ORDER BY created_at DESC`,
+        [callSid],
+        (err, rows) => {
+          if (err) reject(err);
+          else resolve(rows || []);
+        }
+      );
+    });
+
+    // Calculate enhanced call timing metrics
+    let timingMetrics = {};
+    if (call.created_at) {
+      const now = new Date();
+      const created = new Date(call.created_at);
+      timingMetrics.total_elapsed = Math.round((now - created) / 1000);
+      
+      if (call.started_at) {
+        const started = new Date(call.started_at);
+        timingMetrics.time_to_answer = Math.round((started - created) / 1000);
+      }
+      
+      if (call.ended_at) {
+        const ended = new Date(call.ended_at);
+        timingMetrics.call_duration = call.duration || Math.round((ended - new Date(call.started_at || call.created_at)) / 1000);
+      }
+
+      // Calculate ring duration if available
+      if (call.ring_duration) {
+        timingMetrics.ring_duration = call.ring_duration;
+      }
+    }
+
+    res.json({
+      call: {
+        ...call,
+        timing_metrics: timingMetrics
+      },
+      recent_states: recentStates,
+      notification_status: notificationStatus,
+      webhook_service_status: webhookService.getCallStatusStats(),
+      enhanced_tracking: true
+    });
+    
+  } catch (error) {
+    console.error('Error fetching enhanced call status:', error);
+    res.status(500).json({ error: 'Failed to fetch call status' });
+  }
+});
+
+// Manual notification trigger endpoint (for testing)
+app.post('/api/calls/:callSid/notify', async (req, res) => {
+  try {
+    const { callSid } = req.params;
+    const { status, user_chat_id } = req.body;
+    
+    if (!status || !user_chat_id) {
+      return res.status(400).json({ 
+        error: 'Both status and user_chat_id are required' 
+      });
+    }
+
+    const call = await db.getCall(callSid);
+    if (!call) {
+      return res.status(404).json({ error: 'Call not found' });
+    }
+
+    // Send immediate enhanced notification
+    const success = await webhookService.sendImmediateStatus(callSid, status, user_chat_id);
+    
+    if (success) {
+      res.json({ 
+        success: true, 
+        message: `Enhanced manual notification sent: ${status}`,
+        call_sid: callSid,
+        enhanced: true
+      });
+    } else {
+      res.status(500).json({ 
+        success: false, 
+        error: 'Failed to send enhanced notification' 
+      });
+    }
+    
+  } catch (error) {
+    console.error('Error sending enhanced manual notification:', error);
+    res.status(500).json({ 
+      success: false, 
+      error: 'Failed to send notification',
+      details: error.message 
+    });
+  }
+});
+
+// Get enhanced adaptation analytics dashboard data
+app.get('/api/analytics/adaptations', async (req, res) => {
+  try {
+    const limit = parseInt(req.query.limit) || 50;
+    const calls = await db.getCallsWithTranscripts(limit);
+    
+    const analyticsData = {
+      total_calls: calls.length,
+      calls_with_adaptations: 0,
+      total_adaptations: 0,
+      personality_usage: {},
+      industry_breakdown: {},
+      adaptation_triggers: {},
+      enhanced_features: true
+    };
+
+    calls.forEach(call => {
+      try {
+        if (call.ai_analysis) {
+          const analysis = JSON.parse(call.ai_analysis);
+          if (analysis.adaptation && analysis.adaptation.personalityChanges > 0) {
+            analyticsData.calls_with_adaptations++;
+            analyticsData.total_adaptations += analysis.adaptation.personalityChanges;
+            
+            // Track final personality usage
+            const finalPersonality = analysis.adaptation.finalPersonality;
+            if (finalPersonality) {
+              analyticsData.personality_usage[finalPersonality] = 
+                (analyticsData.personality_usage[finalPersonality] || 0) + 1;
+            }
+            
+            // Track industry usage
+            const industry = analysis.adaptation.businessContext?.industry;
+            if (industry) {
+              analyticsData.industry_breakdown[industry] = 
+                (analyticsData.industry_breakdown[industry] || 0) + 1;
+            }
+          }
+        }
+      } catch (e) {
+        // Skip calls with invalid analysis data
+      }
+    });
+
+    analyticsData.adaptation_rate = analyticsData.total_calls > 0 ? 
+      (analyticsData.calls_with_adaptations / analyticsData.total_calls * 100).toFixed(1) : 0;
+    
+    analyticsData.avg_adaptations_per_call = analyticsData.calls_with_adaptations > 0 ? 
+      (analyticsData.total_adaptations / analyticsData.calls_with_adaptations).toFixed(1) : 0;
+
+    res.json(analyticsData);
+  } catch (error) {
+    console.error('Error fetching enhanced adaptation analytics:', error);
+    res.status(500).json({ error: 'Failed to fetch analytics' });
+  }
+});
+
+// Enhanced notification analytics endpoint
+app.get('/api/analytics/notifications', async (req, res) => {
+  try {
+    const limit = parseInt(req.query.limit) || 100;
+    const hours = parseInt(req.query.hours) || 24;
+    
+    const notificationStats = await new Promise((resolve, reject) => {
+      db.db.all(`
+        SELECT 
+          notification_type,
+          status,
+          COUNT(*) as count,
+          AVG(CASE 
+            WHEN sent_at IS NOT NULL AND created_at IS NOT NULL 
+            THEN (julianday(sent_at) - julianday(created_at)) * 86400 
+            ELSE NULL 
+          END) as avg_delivery_time_seconds,
+          AVG(delivery_time_ms) as avg_delivery_time_ms
+        FROM webhook_notifications 
+        WHERE created_at >= datetime('now', '-${hours} hours')
+        GROUP BY notification_type, status
+        ORDER BY notification_type, status
+      `, (err, rows) => {
+        if (err) reject(err);
+        else resolve(rows || []);
+      });
+    });
+
+    const recentNotifications = await new Promise((resolve, reject) => {
+      db.db.all(`
+        SELECT 
+          wn.*,
+          c.phone_number,
+          c.status as call_status,
+          c.twilio_status
+        FROM webhook_notifications wn
+        LEFT JOIN calls c ON wn.call_sid = c.call_sid
+        WHERE wn.created_at >= datetime('now', '-${hours} hours')
+        ORDER BY wn.created_at DESC
+        LIMIT ${limit}
+      `, (err, rows) => {
+        if (err) reject(err);
+        else resolve(rows || []);
+      });
+    });
+
+    // Calculate enhanced summary metrics
+    const totalNotifications = notificationStats.reduce((sum, stat) => sum + stat.count, 0);
+    const successfulNotifications = notificationStats
+      .filter(stat => stat.status === 'sent')
+      .reduce((sum, stat) => sum + stat.count, 0);
+    
+    const successRate = totalNotifications > 0 ? 
+      ((successfulNotifications / totalNotifications) * 100).toFixed(1) : 0;
+
+    const avgDeliveryTime = notificationStats
+      .filter(stat => stat.avg_delivery_time_seconds !== null)
+      .reduce((sum, stat, _, arr) => {
+        return sum + (stat.avg_delivery_time_seconds / arr.length);
+      }, 0);
+
+    // Get notification metrics from database
+    const notificationMetrics = await db.getNotificationAnalytics(Math.ceil(hours / 24));
+
+    res.json({
+      summary: {
+        total_notifications: totalNotifications,
+        successful_notifications: successfulNotifications,
+        success_rate_percent: parseFloat(successRate),
+        average_delivery_time_seconds: avgDeliveryTime.toFixed(2),
+        time_period_hours: hours,
+        enhanced_tracking: true
+      },
+      notification_breakdown: notificationStats,
+      recent_notifications: recentNotifications,
+      historical_metrics: notificationMetrics,
+      webhook_service_health: await webhookService.healthCheck()
+    });
+    
+  } catch (error) {
+    console.error('Error fetching enhanced notification analytics:', error);
+    res.status(500).json({ 
+      error: 'Failed to fetch notification analytics',
+      details: error.message 
+    });
+  }
+});
+
+// Generate functions for a given prompt (testing endpoint)
+app.post('/api/generate-functions', async (req, res) => {
+  try {
+    const { prompt, first_message } = req.body;
+    
+    if (!prompt || !first_message) {
+      return res.status(400).json({ error: 'Both prompt and first_message are required' });
+    }
+
+    const functionSystem = functionEngine.generateAdaptiveFunctionSystem(prompt, first_message);
+    
+    res.json({
+      success: true,
+      business_context: functionSystem.context,
+      functions: functionSystem.functions,
+      function_count: functionSystem.functions.length,
+      analysis: functionEngine.getBusinessAnalysis(),
+      enhanced: true
+    });
+  } catch (error) {
+    console.error('Error generating enhanced functions:', error);
+    res.status(500).json({ error: 'Failed to generate functions' });
+  }
+});
+
+// Enhanced health endpoint with comprehensive system status
+app.get('/health', async (req, res) => {
+  try {
+    const calls = await db.getCallsWithTranscripts(1);
+    const webhookHealth = await webhookService.healthCheck();
+    const callStats = webhookService.getCallStatusStats();
+    const notificationMetrics = await db.getNotificationAnalytics(1);
+    
+    // Check service health logs
+    const recentHealthLogs = await new Promise((resolve, reject) => {
+      db.db.all(`
+        SELECT service_name, status, COUNT(*) as count
+        FROM service_health_logs 
+        WHERE timestamp >= datetime('now', '-1 hour')
+        GROUP BY service_name, status
+        ORDER BY service_name
+      `, (err, rows) => {
+        if (err) reject(err);
+        else resolve(rows || []);
+      });
+    });
+    
+    res.json({ 
+      status: 'healthy', 
+      timestamp: new Date().toISOString(),
+      enhanced_features: true,
+      services: {
+        database: {
+          connected: true,
+          recent_calls: calls.length
+        },
+        webhook_service: webhookHealth,
+        call_tracking: callStats,
+        notification_system: {
+          total_today: notificationMetrics.total_notifications,
+          success_rate: notificationMetrics.overall_success_rate + '%',
+          avg_delivery_time: notificationMetrics.breakdown.length > 0 ? 
+            notificationMetrics.breakdown[0].avg_delivery_time + 'ms' : 'N/A'
+        }
+      },
+      active_calls: callConfigurations.size,
+      adaptation_engine: {
+        available_templates: functionEngine ? functionEngine.getBusinessAnalysis().availableTemplates.length : 0,
+        active_function_systems: callFunctionSystems.size
+      },
+      system_health: recentHealthLogs
+    });
+  } catch (error) {
+    console.error('Enhanced health check error:', error);
+    res.status(500).json({
+      status: 'unhealthy',
+      timestamp: new Date().toISOString(),
+      enhanced_features: true,
+      error: error.message,
+      services: {
+        database: {
+          connected: false,
+          error: error.message
+        },
+        webhook_service: {
+          status: 'error',
+          reason: 'Database connection failed'
+        }
+      }
+    });
+  }
+});
+
+// Enhanced system maintenance endpoint
+app.post('/api/system/cleanup', async (req, res) => {
+  try {
+    const { days_to_keep = 30 } = req.body;
+    
+    console.log(`🧹 Starting enhanced system cleanup (keeping ${days_to_keep} days)...`.yellow);
+    
+    const cleanedRecords = await db.cleanupOldRecords(days_to_keep);
+    
+    // Log cleanup operation
+    await db.logServiceHealth('system_maintenance', 'cleanup_completed', {
+      records_cleaned: cleanedRecords,
+      days_kept: days_to_keep
+    });
+    
+    res.json({
+      success: true,
+      records_cleaned: cleanedRecords,
+      days_kept: days_to_keep,
+      timestamp: new Date().toISOString(),
+      enhanced: true
+    });
+    
+  } catch (error) {
+    console.error('Error during enhanced system cleanup:', error);
+    
+    await db.logServiceHealth('system_maintenance', 'cleanup_failed', {
+      error: error.message
+    });
+    
+    res.status(500).json({
+      success: false,
+      error: 'System cleanup failed',
+      details: error.message
+    });
+  }
+});
+
+startServer();
+
+// Enhanced graceful shutdown with comprehensive cleanup
+process.on('SIGINT', async () => {
+  console.log('\n🛑 Shutting down enhanced adaptive system gracefully...'.yellow);
+  
+  try {
+    // Log shutdown start
+    await db.logServiceHealth('system', 'shutdown_initiated', {
+      active_calls: callConfigurations.size,
+      tracked_calls: callFunctionSystems.size
+    });
+    
+    // Stop services
+    webhookService.stop();
+    callConfigurations.clear();
+    callFunctionSystems.clear();
+    
+    // Log successful shutdown
+    await db.logServiceHealth('system', 'shutdown_completed', {
+      timestamp: new Date().toISOString()
+    });
+    
+    await db.close();
+    console.log('✅ Enhanced adaptive system shutdown complete'.green);
+  } catch (shutdownError) {
+    console.error('❌ Error during shutdown:', shutdownError);
+  }
+  
+  process.exit(0);
+});
+
+process.on('SIGTERM', async () => {
+  console.log('\n🛑 Shutting down enhanced adaptive system gracefully...'.yellow);
+  
+  try {
+    // Log shutdown start
+    await db.logServiceHealth('system', 'shutdown_initiated', {
+      active_calls: callConfigurations.size,
+      tracked_calls: callFunctionSystems.size,
+      reason: 'SIGTERM'
+    });
+    
+    // Stop services
+    webhookService.stop();
+    callConfigurations.clear();
+    callFunctionSystems.clear();
+    
+    // Log successful shutdown
+    await db.logServiceHealth('system', 'shutdown_completed', {
+      timestamp: new Date().toISOString()
+    });
+    
+    await db.close();
+    console.log('✅ Enhanced adaptive system shutdown complete'.green);
+  } catch (shutdownError) {
+    console.error('❌ Error during shutdown:', shutdownError);
+  }
+  
+  process.exit(0);
 });
