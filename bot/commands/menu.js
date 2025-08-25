@@ -1,16 +1,17 @@
 const { InlineKeyboard } = require('grammy');
-const { checkUserAuthorization, checkAdminStatus, handleCommandError } = require('../utils/helpers');
+const { getUser, isAdmin } = require('../db/db');
 
 module.exports = (bot) => {
     // Menu command
     bot.command('menu', async (ctx) => {
         try {
-            const user = await checkUserAuthorization(ctx.from.id);
+            // Check user authorization
+            const user = await new Promise(r => getUser(ctx.from.id, r));
             if (!user) {
                 return ctx.reply('❌ You are not authorized to use this bot.');
             }
 
-            const isOwner = await checkAdminStatus(ctx.from.id);
+            const isOwner = await new Promise(r => isAdmin(ctx.from.id, r));
             
             const kb = new InlineKeyboard()
                 .text('📞 New Call', 'CALL')
@@ -42,72 +43,8 @@ module.exports = (bot) => {
                 reply_markup: kb
             });
         } catch (error) {
-            await handleCommandError(ctx, error, 'menu display');
-        }
-    });
-
-    // Enhanced callback handlers
-    bot.callbackQuery('CALLS', async (ctx) => {
-        try {
-            await ctx.answerCallbackQuery();
-            const user = await checkUserAuthorization(ctx.from.id);
-            if (!user) {
-                return ctx.reply('❌ You are not authorized to use this bot.');
-            }
-            
-            // Simulate the calls command
-            ctx.message = { text: '/calls 10' };
-            await ctx.reply('📋 Fetching recent calls...');
-        } catch (error) {
-            await handleCommandError(ctx, error, 'calls list');
-        }
-    });
-
-    bot.callbackQuery('HEALTH', async (ctx) => {
-        try {
-            await ctx.answerCallbackQuery();
-            const user = await checkUserAuthorization(ctx.from.id);
-            if (!user) {
-                return ctx.reply('❌ You are not authorized to use this bot.');
-            }
-            
-            // Simulate the health command
-            ctx.message = { text: '/health' };
-            await ctx.reply('🏥 Checking system health...');
-        } catch (error) {
-            await handleCommandError(ctx, error, 'health check');
-        }
-    });
-
-    bot.callbackQuery('STATUS', async (ctx) => {
-        try {
-            await ctx.answerCallbackQuery();
-            const isOwner = await checkAdminStatus(ctx.from.id);
-            if (!isOwner) {
-                return ctx.reply('❌ This action is for administrators only.');
-            }
-            
-            // Simulate the status command
-            ctx.message = { text: '/status' };
-            await ctx.reply('🔍 Checking full system status...');
-        } catch (error) {
-            await handleCommandError(ctx, error, 'status check');
-        }
-    });
-
-    bot.callbackQuery('TEST_API', async (ctx) => {
-        try {
-            await ctx.answerCallbackQuery();
-            const isOwner = await checkAdminStatus(ctx.from.id);
-            if (!isOwner) {
-                return ctx.reply('❌ This action is for administrators only.');
-            }
-            
-            // Simulate the test_api command
-            ctx.message = { text: '/test_api' };
-            await ctx.reply('🧪 Testing API connection...');
-        } catch (error) {
-            await handleCommandError(ctx, error, 'API test');
+            console.error('Menu command error:', error);
+            await ctx.reply('❌ Error displaying menu. Please try again.');
         }
     });
 };

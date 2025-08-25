@@ -31,6 +31,7 @@ function escapeMarkdown(text) {
 // Function to get call transcript
 async function getTranscript(ctx, callSid) {
   try {
+    console.log(`Fetching transcript for call: ${callSid}`);
     const response = await axios.get(`${config.apiUrl}/api/calls/${callSid}`, {
       timeout: 15000
     });
@@ -42,7 +43,7 @@ async function getTranscript(ctx, callSid) {
     }
 
     if (!transcripts || transcripts.length === 0) {
-      return ctx.reply(`📋 *Call Details*\n\n📞 ${escapeMarkdown(call.phone_number)}\n🆔 \`${callSid}\`\n\n❌ No transcript available yet`, {
+      return ctx.reply(`📋 *Call Details*\n\n📞 ${escapeMarkdown(call.phone_number)}\n🆔 \`${callSid}\`\n📊 Status: ${escapeMarkdown(call.status || 'Unknown')}\n\n❌ No transcript available yet`, {
         parse_mode: 'Markdown'
       });
     }
@@ -101,11 +102,33 @@ async function getTranscript(ctx, callSid) {
 // Function to get calls list with better formatting
 async function getCallsList(ctx, limit = 10) {
   try {
-    const response = await axios.get(`${config.apiUrl}/api/calls?limit=${limit}`, {
-      timeout: 15000
+    console.log(`Fetching calls list with limit: ${limit}`);
+    
+    // Use the correct API endpoint structure
+    const apiUrl = `${config.apiUrl}/api/calls?limit=${limit}`;
+    console.log(`API URL: ${apiUrl}`);
+    
+    const response = await axios.get(apiUrl, {
+      timeout: 15000,
+      headers: {
+        'Accept': 'application/json',
+        'Content-Type': 'application/json'
+      }
     });
 
-    const { calls } = response.data;
+    console.log('API Response status:', response.status);
+    console.log('API Response data structure:', Object.keys(response.data));
+
+    // Handle different response structures from your API
+    let calls = [];
+    if (response.data.calls) {
+      calls = response.data.calls;
+    } else if (Array.isArray(response.data)) {
+      calls = response.data;
+    } else {
+      console.log('Unexpected API response structure:', response.data);
+      return ctx.reply('❌ Error: Unexpected API response format');
+    }
 
     if (!calls || calls.length === 0) {
       return ctx.reply('📋 No calls found');
@@ -131,7 +154,23 @@ async function getCallsList(ctx, limit = 10) {
 
   } catch (error) {
     console.error('Error fetching calls list:', error);
-    await ctx.reply('❌ Error fetching calls list. Please try again later.');
+    
+    if (error.response) {
+      console.error('API Response Status:', error.response.status);
+      console.error('API Response Data:', error.response.data);
+      
+      if (error.response.status === 404) {
+        await ctx.reply('❌ API endpoint not found. Please check the server configuration.');
+      } else if (error.response.status === 500) {
+        await ctx.reply('❌ Server error while fetching calls. Please try again later.');
+      } else {
+        await ctx.reply(`❌ API error (${error.response.status}): ${error.response.data?.error || 'Unknown error'}`);
+      }
+    } else if (error.code === 'ECONNREFUSED' || error.code === 'ENOTFOUND') {
+      await ctx.reply('❌ Cannot connect to API server. Please check if the server is running.');
+    } else {
+      await ctx.reply('❌ Error fetching calls list. Please try again later.');
+    }
   }
 }
 
@@ -182,6 +221,11 @@ module.exports = (bot) => {
         return ctx.reply('❌ Limit cannot exceed 50 calls');
       }
 
+      if (limit < 1) {
+        return ctx.reply('❌ Limit must be at least 1');
+      }
+
+      await ctx.reply('📋 Fetching recent calls...');
       await getCallsList(ctx, limit);
     } catch (error) {
       console.error('Calls command error:', error);
@@ -211,6 +255,8 @@ module.exports = (bot) => {
         return ctx.reply('❌ Invalid Call SID format. Should start with "CA"');
       }
 
+      await ctx.reply('📋 Fetching full transcript...');
+
       // Send without markdown to avoid parsing issues
       const response = await axios.get(`${config.apiUrl}/api/calls/${callSid}`, {
         timeout: 15000
@@ -227,6 +273,7 @@ module.exports = (bot) => {
       plainMessage += `📞 Number: ${call.phone_number}\n`;
       plainMessage += `🆔 Call ID: ${callSid}\n`;
       plainMessage += `⏱️ Duration: ${call.duration ? Math.floor(call.duration/60) + ':' + String(call.duration%60).padStart(2,'0') : 'Unknown'}\n`;
+      plainMessage += `📊 Status: ${call.status || 'Unknown'}\n`;
       plainMessage += `💬 Messages: ${transcripts.length}\n\n`;
 
       plainMessage += `CONVERSATION:\n`;
@@ -264,7 +311,11 @@ module.exports = (bot) => {
 
     } catch (error) {
       console.error('Full transcript error:', error);
-      await ctx.reply('❌ Error fetching full transcript');
+      if (error.response?.status === 404) {
+        await ctx.reply('❌ Call not found');
+      } else {
+        await ctx.reply('❌ Error fetching full transcript');
+      }
     }
   });
 };

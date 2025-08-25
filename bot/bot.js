@@ -124,11 +124,14 @@ bot.command('start', async (ctx) => {
     }
 });
 
-// Callback query handler with improved error handling
+// Enhanced callback query handler
 bot.on('callback_query:data', async (ctx) => {
     try {
         // Answer callback query immediately to prevent timeout
         await ctx.answerCallbackQuery();
+
+        const action = ctx.callbackQuery.data;
+        console.log(`Callback query received: ${action} from user ${ctx.from.id}`);
 
         // Verify user authorization
         const user = await new Promise(r => getUser(ctx.from.id, r));
@@ -139,14 +142,14 @@ bot.on('callback_query:data', async (ctx) => {
 
         // Check admin permissions
         const isAdminUser = user.role === 'ADMIN';
-        const adminActions = ['ADDUSER', 'PROMOTE', 'REMOVE', 'USERS'];
+        const adminActions = ['ADDUSER', 'PROMOTE', 'REMOVE', 'USERS', 'STATUS', 'TEST_API'];
         
-        if (adminActions.includes(ctx.callbackQuery.data) && !isAdminUser) {
+        if (adminActions.includes(action) && !isAdminUser) {
             await ctx.reply("❌ This action is for administrators only.");
             return;
         }
 
-        // Handle different types of actions
+        // Handle conversation actions
         const conversations = {
             'CALL': 'call-conversation',
             'ADDUSER': 'adduser-conversation',
@@ -154,78 +157,340 @@ bot.on('callback_query:data', async (ctx) => {
             'REMOVE': 'remove-conversation'
         };
 
-        const commands = {
-            'HELP': '/help',
-            'USERS': '/users',
-            'GUIDE': '/guide',
-            'MENU': '/menu'
-        };
-
-        // Process conversation actions
-        if (conversations[ctx.callbackQuery.data]) {
-            await ctx.reply(`Starting ${ctx.callbackQuery.data.toLowerCase()} process...`);
-            await ctx.conversation.enter(conversations[ctx.callbackQuery.data]);
+        if (conversations[action]) {
+            console.log(`Starting conversation: ${conversations[action]}`);
+            await ctx.reply(`Starting ${action.toLowerCase()} process...`);
+            await ctx.conversation.enter(conversations[action]);
             return;
         }
 
-        // Process command actions
-        if (commands[ctx.callbackQuery.data]) {
-            // Execute the command by simulating a text message
-            const commandText = commands[ctx.callbackQuery.data];
-            
-            // Create a mock message object and call the appropriate handler
-            if (commandText === '/help') {
-                await ctx.reply(`*Voice Call Bot Commands*
+        // Handle direct command actions
+        switch (action) {
+            case 'HELP':
+                await executeHelpCommand(ctx, isAdminUser);
+                break;
+                
+            case 'USERS':
+                if (isAdminUser) {
+                    await executeUsersCommand(ctx);
+                }
+                break;
+                
+            case 'GUIDE':
+                await executeGuideCommand(ctx);
+                break;
+                
+            case 'MENU':
+                await executeMenuCommand(ctx, isAdminUser);
+                break;
+                
+            case 'HEALTH':
+                await executeHealthCommand(ctx);
+                break;
+                
+            case 'STATUS':
+                if (isAdminUser) {
+                    await executeStatusCommand(ctx);
+                }
+                break;
+                
+            case 'TEST_API':
+                if (isAdminUser) {
+                    await executeTestApiCommand(ctx);
+                }
+                break;
+                
+            case 'CALLS':
+                await executeCallsCommand(ctx);
+                break;
+                
+            default:
+                console.log(`Unknown callback action: ${action}`);
+                await ctx.reply("❌ Unknown action. Please try again.");
+        }
 
-📱 *Basic Commands*
+    } catch (error) {
+        console.error('Callback query error:', error);
+        await ctx.reply("❌ An error occurred processing your request. Please try again.");
+    }
+});
+
+// Command execution functions for inline buttons
+async function executeHelpCommand(ctx, isAdminUser) {
+    const basicCommands = `📱 *Basic Commands*
 • /start - Restart bot & show main menu
 • /call - Start a new voice call
 • /transcript <call_sid> - Get call transcript
-• /calls [limit] - List recent calls
-• /health or /ping - Check bot health
+• /calls [limit] - List recent calls (max 50)
+• /health or /ping - Check bot & API health
+• /guide - Show detailed usage guide
 • /menu - Show quick action buttons
-• /help - Show this help message
+• /help - Show this help message\n`;
 
-${isAdminUser ? `\n👑 *Admin Commands*
+    const adminCommands = `\n👑 *Admin Commands*
 • /adduser - Add new authorized user
 • /promote - Promote user to admin
 • /removeuser - Remove user access
 • /users - List all authorized users
-• /status - Full system status
-• /test_api - Test API connection\n` : ''}
+• /status - Full system status check
+• /test_api - Test API connection\n`;
 
-📖 *Quick Guide*
+    const usageGuide = `\n📖 *Quick Usage*
 1. Use /call or click 📞 Call button
 2. Enter phone number (E.164 format: +1234567890)
 3. Define agent behavior/prompt
-4. Set initial message
-5. Monitor call progress
+4. Set initial message to be spoken
+5. Monitor call progress and receive notifications\n`;
 
-💡 *Support*
-Contact: @${config.admin.username} for help
-Version: 2.0.0`, { parse_mode: 'Markdown' });
-            } else if (commandText === '/users' && isAdminUser) {
-                // This will be handled by the users command module
-                ctx.message = { text: '/users' };
-                // The users module will handle this
-            } else if (commandText === '/guide') {
-                ctx.message = { text: '/guide' };
-                // The guide module will handle this
-            } else if (commandText === '/menu') {
-                ctx.message = { text: '/menu' };
-                // The menu module will handle this
-            }
-            return;
+    const examples = `\n💡 *Examples*
+• Phone format: +1234567890 (not 123-456-7890)
+• Get transcript: /transcript CA1234567890abcdef
+• List calls: /calls 20
+• Check health: /health\n`;
+
+    const supportInfo = `\n🆘 *Support & Info*
+• Contact admin: @${config.admin.username}
+• Bot version: 2.0.0
+• For issues or questions, contact support`;
+
+    const kb = new InlineKeyboard()
+        .text('📞 New Call', 'CALL')
+        .text('📋 Menu', 'MENU')
+        .row()
+        .text('📚 Full Guide', 'GUIDE');
+
+    if (isAdminUser) {
+        kb.row()
+            .text('👥 Users', 'USERS')
+            .text('➕ Add User', 'ADDUSER');
+    }
+
+    await ctx.reply(
+        basicCommands +
+        (isAdminUser ? adminCommands : '') +
+        usageGuide +
+        examples +
+        supportInfo,
+        {
+            parse_mode: 'Markdown',
+            reply_markup: kb
+        }
+    );
+}
+
+async function executeUsersCommand(ctx) {
+    const { getUserList } = require('./db/db');
+    
+    const users = await new Promise(r => getUserList(r));
+    if (!users || users.length === 0) {
+        await ctx.reply('No users found.');
+        return;
+    }
+
+    const userList = users.map(u => 
+        `${u.role === 'ADMIN' ? '🛡️' : '👤'} @${u.username} (${u.telegram_id})`
+    ).join('\n');
+
+    await ctx.reply(`*Users List (${users.length}):*\n\n${userList}`, {
+        parse_mode: 'Markdown'
+    });
+}
+
+async function executeGuideCommand(ctx) {
+    const mainGuide = `📚 *Voice Call Bot Guide*
+
+*Making Calls:*
+1️⃣ Start a call using /call or the Call button
+2️⃣ Enter phone number in E.164 format (+1234567890)
+3️⃣ Define the AI agent's behavior/personality
+4️⃣ Set the first message to be spoken
+5️⃣ Monitor the call progress
+
+*Phone Number Format:*
+• Must start with + symbol
+• Include country code
+• No spaces or special characters
+• Example: +1234567890
+
+*Best Practices:*
+• Keep agent prompts clear and specific
+• Test with short calls first
+• Monitor initial responses
+• End calls if needed
+
+*Troubleshooting:*
+• If call fails, check number format
+• Ensure proper authorization
+• Contact admin for persistent issues
+• Use /status to check bot health
+
+*Need Help?*
+Contact: @${config.admin.username} for support.
+Version: 2.0.0`;
+
+    const kb = new InlineKeyboard()
+        .text('📞 New Call', 'CALL')
+        .text('📋 Commands', 'HELP')
+        .row()
+        .text('🔄 Main Menu', 'MENU');
+
+    await ctx.reply(mainGuide, {
+        parse_mode: 'Markdown',
+        reply_markup: kb
+    });
+}
+
+async function executeMenuCommand(ctx, isAdminUser) {
+    const kb = new InlineKeyboard()
+        .text('📞 New Call', 'CALL')
+        .text('📋 Recent Calls', 'CALLS')
+        .row()
+        .text('🏥 Health Check', 'HEALTH')
+        .text('ℹ️ Help', 'HELP')
+        .row()
+        .text('📚 Guide', 'GUIDE');
+
+    if (isAdminUser) {
+        kb.row()
+            .text('➕ Add User', 'ADDUSER')
+            .text('⬆️ Promote', 'PROMOTE')
+            .row()
+            .text('👥 Users', 'USERS')
+            .text('❌ Remove', 'REMOVE')
+            .row()
+            .text('🔍 Status', 'STATUS')
+            .text('🧪 Test API', 'TEST_API');
+    }
+
+    const menuText = isAdminUser ? 
+        '🛡️ *Administrator Menu*\n\nSelect an action below:' :
+        '📋 *Quick Actions Menu*\n\nSelect an action below:';
+
+    await ctx.reply(menuText, {
+        parse_mode: 'Markdown',
+        reply_markup: kb
+    });
+}
+
+async function executeHealthCommand(ctx) {
+    const axios = require('axios');
+    
+    try {
+        const startTime = Date.now();
+        const response = await axios.get(`${config.apiUrl}/health`, {
+            timeout: 5000
+        });
+        const responseTime = Date.now() - startTime;
+        
+        const health = response.data;
+        
+        let message = `🏥 *Health Check*\n\n`;
+        message += `🤖 Bot: ✅ Responsive\n`;
+        message += `🌐 API: ${health.status === 'healthy' ? '✅' : '❌'} ${health.status}\n`;
+        message += `⚡ Response Time: ${responseTime}ms\n`;
+        message += `📊 Active Calls: ${health.active_calls || 0}\n`;
+        message += `⏰ Checked: ${new Date().toLocaleTimeString()}`;
+        
+        await ctx.reply(message, { parse_mode: 'Markdown' });
+    } catch (error) {
+        console.error('Health command error:', error);
+        await ctx.reply(`❌ *Health Check Failed*\n\nBot is online but API connection failed.\nError: ${error.message}`, { parse_mode: 'Markdown' });
+    }
+}
+
+async function executeStatusCommand(ctx) {
+    const axios = require('axios');
+    
+    try {
+        const response = await axios.get(`${config.apiUrl}/health`, {
+            timeout: 10000
+        });
+        
+        const health = response.data;
+        
+        let message = `🔍 *System Status*\n\n`;
+        message += `🤖 Bot: ✅ Online\n`;
+        message += `🌐 API: ${health.status === 'healthy' ? '✅' : '❌'} ${health.status}\n`;
+        message += `🗄️ Database: ${health.services?.database?.connected ? '✅ Connected' : '❌ Disconnected'}\n`;
+        message += `📊 Active Calls: ${health.active_calls || 0}\n`;
+        message += `📋 Recent Calls: ${health.services?.database?.recent_calls || 0}\n`;
+        message += `📡 Webhook Service: ${health.services?.webhook_service?.status || 'Unknown'}\n`;
+        message += `⏰ Last Check: ${new Date(health.timestamp).toLocaleString()}\n\n`;
+        message += `📡 API Endpoint: ${config.apiUrl}`;
+        
+        await ctx.reply(message, { parse_mode: 'Markdown' });
+    } catch (error) {
+        console.error('Status command error:', error);
+        await ctx.reply(`❌ *System Status Check Failed*\n\nError: ${error.message}`, { parse_mode: 'Markdown' });
+    }
+}
+
+async function executeTestApiCommand(ctx) {
+    const axios = require('axios');
+    
+    try {
+        console.log('Testing API connection to:', config.apiUrl);
+        const response = await axios.get(`${config.apiUrl}/health`, {
+            timeout: 10000
+        });
+        
+        const health = response.data;
+        
+        let message = `✅ *API Status: ${health.status}*\n\n`;
+        message += `🔗 URL: ${config.apiUrl}\n`;
+        message += `📊 Active Calls: ${health.active_calls || 0}\n`;
+        message += `🗄️ Database: ${health.services?.database?.connected ? '✅ Connected' : '❌ Disconnected'}\n`;
+        message += `⏰ Timestamp: ${new Date(health.timestamp).toLocaleString()}`;
+        
+        // Add enhanced features info if available
+        if (health.enhanced_features) {
+            message += `\n🚀 Enhanced Features: ✅ Active`;
+        }
+        
+        await ctx.reply(message, { parse_mode: 'Markdown' });
+    } catch (error) {
+        console.error('API test failed:', error.message);
+        await ctx.reply(`❌ *API Test Failed*\n\nURL: ${config.apiUrl}\nError: ${error.message}`, { parse_mode: 'Markdown' });
+    }
+}
+
+async function executeCallsCommand(ctx) {
+    const axios = require('axios');
+    
+    try {
+        const response = await axios.get(`${config.apiUrl}/api/calls?limit=10`, {
+            timeout: 15000
+        });
+
+        const calls = response.data.calls || [];
+
+        if (!calls || calls.length === 0) {
+            return ctx.reply('📋 No calls found');
         }
 
-        // Handle unknown actions
-        await ctx.reply("❌ Unknown action. Please try again.");
+        let message = `📋 *Recent Calls* (${calls.length})\n\n`;
+
+        calls.forEach((call, index) => {
+            const date = new Date(call.created_at).toLocaleDateString();
+            const duration = call.duration ? `${Math.floor(call.duration/60)}:${String(call.duration%60).padStart(2,'0')}` : 'N/A';
+            const status = call.status || 'Unknown';
+            const phoneNumber = call.phone_number;
+
+            message += `${index + 1}\\. 📞 ${phoneNumber.replace(/[^\w\s+]/g, '\\$&')}\n`;
+            message += `   🆔 \`${call.call_sid}\`\n`;
+            message += `   📅 ${date} \\| ⏱️ ${duration} \\| 📊 ${status.replace(/[^\w\s]/g, '\\$&')}\n`;
+            message += `   💬 ${call.transcript_count || 0} messages\n\n`;
+        });
+
+        message += `Use /transcript <call\\_sid> to view details`;
+
+        await ctx.reply(message, { parse_mode: 'Markdown' });
 
     } catch (error) {
-        console.error('Callback query error:', error);
-        await ctx.reply("❌ An error occurred. Please try again.");
+        console.error('Error fetching calls list:', error);
+        await ctx.reply('❌ Error fetching calls list. Please try again later.');
     }
-});
+}
 
 // Register bot commands
 bot.api.setMyCommands([
@@ -244,7 +509,7 @@ bot.api.setMyCommands([
     { command: 'status', description: 'System status (admin only)' }
 ]);
 
-// Handle unknown commands
+// Handle unknown commands and text messages
 bot.on('message:text', async (ctx) => {
     const text = ctx.message.text;
     
@@ -253,7 +518,7 @@ bot.on('message:text', async (ctx) => {
         return;
     }
     
-    // For non-command messages, show help
+    // For non-command messages outside conversations
     if (!ctx.conversation) {
         await ctx.reply('👋 Use /help to see available commands or /menu for quick actions.');
     }
@@ -261,12 +526,10 @@ bot.on('message:text', async (ctx) => {
 
 // Start the bot
 console.log('🚀 Starting Voice Call Bot...');
-// Simple startup with immediate success message
-bot.start().catch((error) => {
+bot.start().then(() => {
+    console.log('✅ Voice Call Bot is running!');
+    console.log('🔄 Polling for updates...');
+}).catch((error) => {
     console.error('❌ Failed to start bot:', error);
     process.exit(1);
 });
-
-// Show success message after starting
-console.log('✅ Voicednut Bot is running!');
-console.log('🔄 Polling for updates...');
