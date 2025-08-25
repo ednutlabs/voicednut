@@ -172,7 +172,12 @@ bot.on('callback_query:data', async (ctx) => {
                 
             case 'USERS':
                 if (isAdminUser) {
-                    await executeUsersCommand(ctx);
+                    try {
+                        await executeUsersCommand(ctx);
+                    } catch (usersError) {
+                        console.error('Users callback error:', usersError);
+                        await ctx.reply('❌ Error displaying users list. Please try again.');
+                    }
                 }
                 break;
                 
@@ -279,21 +284,41 @@ async function executeHelpCommand(ctx, isAdminUser) {
 }
 
 async function executeUsersCommand(ctx) {
-    const { getUserList } = require('./db/db');
-    
-    const users = await new Promise(r => getUserList(r));
-    if (!users || users.length === 0) {
-        await ctx.reply('No users found.');
-        return;
+    try {
+        const { getUserList } = require('./db/db');
+        
+        const users = await new Promise((resolve, reject) => {
+            getUserList((err, result) => {
+                if (err) {
+                    console.error('Database error in getUserList:', err);
+                    reject(err);
+                } else {
+                    resolve(result);
+                }
+            });
+        });
+
+        if (!users || users.length === 0) {
+            await ctx.reply('📋 No users found in the system.');
+            return;
+        }
+
+        // Create user list without problematic markdown - use plain text
+        let message = `📋 USERS LIST (${users.length}):\n\n`;
+        
+        users.forEach((user, index) => {
+            const roleIcon = user.role === 'ADMIN' ? '🛡️' : '👤';
+            const username = user.username || 'no_username';
+            message += `${index + 1}. ${roleIcon} @${username} (${user.telegram_id})\n`;
+        });
+
+        // Send without parse_mode to avoid markdown parsing errors
+        await ctx.reply(message);
+
+    } catch (error) {
+        console.error('executeUsersCommand error:', error);
+        await ctx.reply('❌ Error fetching users list. Please try again.');
     }
-
-    const userList = users.map(u => 
-        `${u.role === 'ADMIN' ? '🛡️' : '👤'} @${u.username} (${u.telegram_id})`
-    ).join('\n');
-
-    await ctx.reply(`*Users List (${users.length}):*\n\n${userList}`, {
-        parse_mode: 'Markdown'
-    });
 }
 
 async function executeGuideCommand(ctx) {

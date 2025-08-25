@@ -3,28 +3,60 @@ const { getUserList, getUser } = require('../db/db');
 module.exports = (bot) => {
     bot.command('users', async (ctx) => {
         try {
-            const user = await new Promise(r => getUser(ctx.from.id, r));
-            if (!user || user.role !== 'ADMIN') {
-                await ctx.reply('❌ Admin only.');
-                return;
-            }
-
-            const users = await new Promise(r => getUserList(r));
-            if (!users.length) {
-                await ctx.reply('No users found.');
-                return;
-            }
-
-            const userList = users.map(u => 
-                `${u.role === 'ADMIN' ? '🛡️' : '👤'} @${u.username} (${u.telegram_id})`
-            ).join('\n');
-
-            await ctx.reply(`*Users List:*\n${userList}`, {
-                parse_mode: 'Markdown'
+            // Check authorization first
+            const user = await new Promise((resolve, reject) => {
+                getUser(ctx.from.id, (err, result) => {
+                    if (err) {
+                        console.error('Database error in getUser:', err);
+                        reject(err);
+                    } else {
+                        resolve(result);
+                    }
+                });
             });
+
+            if (!user) {
+                await ctx.reply('❌ You are not authorized to use this bot.');
+                return;
+            }
+
+            if (user.role !== 'ADMIN') {
+                await ctx.reply('❌ This command is for administrators only.');
+                return;
+            }
+
+            // Get users list
+            const users = await new Promise((resolve, reject) => {
+                getUserList((err, result) => {
+                    if (err) {
+                        console.error('Database error in getUserList:', err);
+                        reject(err);
+                    } else {
+                        resolve(result);
+                    }
+                });
+            });
+
+            if (!users || users.length === 0) {
+                await ctx.reply('📋 No users found in the system.');
+                return;
+            }
+
+            // Format users list safely - use plain text to avoid markdown issues
+            let message = `📋 USERS LIST (${users.length}):\n\n`;
+            
+            users.forEach((user, index) => {
+                const roleIcon = user.role === 'ADMIN' ? '🛡️' : '👤';
+                const username = user.username || 'no_username';
+                message += `${index + 1}. ${roleIcon} @${username} (${user.telegram_id})\n`;
+            });
+
+            // Send without parse_mode to avoid markdown parsing errors
+            await ctx.reply(message);
+
         } catch (error) {
             console.error('Users command error:', error);
-            await ctx.reply('❌ An error occurred. Please try again.');
+            await ctx.reply('❌ Error fetching users list. Please try again.');
         }
     });
 };
