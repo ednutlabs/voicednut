@@ -25,7 +25,7 @@ module.exports = (bot) => {
                 return;
             }
 
-            // Get users list
+            // Get users list with proper error handling
             const users = await new Promise((resolve, reject) => {
                 getUserList((err, result) => {
                     if (err) {
@@ -48,7 +48,11 @@ module.exports = (bot) => {
             users.forEach((user, index) => {
                 const roleIcon = user.role === 'ADMIN' ? '🛡️' : '👤';
                 const username = user.username || 'no_username';
-                message += `${index + 1}. ${roleIcon} @${username} (${user.telegram_id})\n`;
+                const joinDate = new Date(user.timestamp).toLocaleDateString();
+                message += `${index + 1}. ${roleIcon} @${username}\n`;
+                message += `   ID: ${user.telegram_id}\n`;
+                message += `   Role: ${user.role}\n`;
+                message += `   Joined: ${joinDate}\n\n`;
             });
 
             // Send without parse_mode to avoid markdown parsing errors

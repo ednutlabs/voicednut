@@ -30,10 +30,11 @@ async function addUserFlow(conversation, ctx) {
             return;
         }
 
-        // Convert callback to Promise
+        // Convert callback to Promise with proper error handling
         await new Promise((resolve, reject) => {
             addUser(id, username, 'USER', (err) => {
                 if (err) {
+                    console.error('Database error in addUser:', err);
                     reject(err);
                     return;
                 }
@@ -46,17 +47,28 @@ async function addUserFlow(conversation, ctx) {
 
     } catch (error) {
         console.error('Add user flow error:', error);
-        await ctx.reply('❌ An error occurred. Please try again.');
+        await ctx.reply('❌ An error occurred while adding user. Please try again.');
     }
 }
 
 function registerAddUserCommand(bot) {
     bot.command(['adduser', 'authorize'], async (ctx) => {
         try {
-            const user = await new Promise(r => getUser(ctx.from.id, r));
+            const user = await new Promise((resolve, reject) => {
+                getUser(ctx.from.id, (err, result) => {
+                    if (err) {
+                        console.error('Database error in getUser:', err);
+                        reject(err);
+                    } else {
+                        resolve(result);
+                    }
+                });
+            });
+            
             if (!user || user.role !== 'ADMIN') {
                 return ctx.reply('❌ Admin only.');
             }
+            
             await ctx.conversation.enter("adduser-conversation");
         } catch (error) {
             console.error('Add user command error:', error);

@@ -27,7 +27,13 @@ function addUser(id, username, role = 'USER', cb = () => {}) {
   db.run(`INSERT OR IGNORE INTO users (telegram_id, username, role) VALUES (?, ?, ?)`, [id, username, role], cb);
 }
 function getUserList(cb) {
-  db.all(`SELECT * FROM users ORDER BY role DESC`, [], (err, rows) => cb(rows || []));
+  db.all(`SELECT * FROM users ORDER BY role DESC`, [], (e, r) => {
+    if (e) {
+      console.error('Database error in getUserList:', e);
+      return cb(e, null);
+    }
+    cb(null, r || []);
+  });
 }
 function promoteUser(id, cb = () => {}) {
   db.run(`UPDATE users SET role = 'ADMIN' WHERE telegram_id = ?`, [id], cb);

@@ -94,7 +94,7 @@ bot.command('start', async (ctx) => {
 
         const welcomeText = isOwner ? 
             '🛡️ *Welcome, Administrator!*\n\nYou have full access to all bot features.' :
-            '👋 *Welcome to Voice Call Bot!*\n\nYou can make voice calls using AI agents.';
+            '👋 *Welcome to Voicednut Bot!*\n\nYou can make voice calls using AI agents.';
 
         // Prepare keyboard
         const kb = new InlineKeyboard()
@@ -309,7 +309,11 @@ async function executeUsersCommand(ctx) {
         users.forEach((user, index) => {
             const roleIcon = user.role === 'ADMIN' ? '🛡️' : '👤';
             const username = user.username || 'no_username';
-            message += `${index + 1}. ${roleIcon} @${username} (${user.telegram_id})\n`;
+            const joinDate = new Date(user.timestamp).toLocaleDateString();
+            message += `${index + 1}. ${roleIcon} @${username}\n`;
+            message += `   ID: ${user.telegram_id}\n`;
+            message += `   Role: ${user.role}\n`;
+            message += `   Joined: ${joinDate}\n\n`;
         });
 
         // Send without parse_mode to avoid markdown parsing errors
