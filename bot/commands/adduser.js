@@ -1,4 +1,4 @@
-const { getUser, addUser } = require('../db/db');
+const { getUser, addUser, isAdmin } = require('../db/db');
 
 async function addUserFlow(conversation, ctx) {
     try {
