@@ -4,7 +4,7 @@ const { getUser, isAdmin } = require('../db/db');
 
 module.exports = (bot) => {
     // API test command (enhanced)
-    bot.command('test_api', async (ctx) => {
+    bot.command('testapi', async (ctx) => {
         try {
             // Check if user is authorized and is admin
             const user = await new Promise(r => getUser(ctx.from.id, r));
