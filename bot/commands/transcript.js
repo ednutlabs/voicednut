@@ -101,78 +101,120 @@ async function getTranscript(ctx, callSid) {
 
 // Function to get calls list with better formatting
 async function getCallsList(ctx, limit = 10) {
-  try {
-    console.log(`Fetching calls list with limit: ${limit}`);
-    
     // Use the correct API endpoint structure
-    const apiUrl = `${config.apiUrl}/api/calls?limit=${limit}`;
-    console.log(`API URL: ${apiUrl}`);
-    
-    const response = await axios.get(apiUrl, {
-      timeout: 15000,
-      headers: {
-        'Accept': 'application/json',
-        'Content-Type': 'application/json'
-      }
-    });
+    try {
+        console.log('Executing calls command via callback...');
+        
+        let response;
+        let calls = [];
+        
+        // Try multiple API endpoints in order of preference
+        const endpoints = [
+            `${config.apiUrl}/api/calls/list?limit=10`,  // Enhanced endpoint
+            `${config.apiUrl}/api/calls?limit=10`,       // Basic endpoint
+        ];
+        
+        let lastError = null;
+        let successfulEndpoint = null;
+        
+        for (const endpoint of endpoints) {
+            try {
+                console.log(`Trying endpoint: ${endpoint}`);
+                
+                response = await axios.get(endpoint, {
+                    timeout: 15000,
+                    headers: {
+                        'Accept': 'application/json',
+                        'Content-Type': 'application/json'
+                    }
+                });
 
-    console.log('API Response status:', response.status);
-    console.log('API Response data structure:', Object.keys(response.data));
+                console.log(`Success! API Response status: ${response.status}`);
+                successfulEndpoint = endpoint;
+                
+                // Handle different response structures
+                if (response.data.calls) {
+                    calls = response.data.calls;
+                } else if (Array.isArray(response.data)) {
+                    calls = response.data;
+                } else {
+                    console.log('Unexpected response structure:', Object.keys(response.data));
+                    continue; // Try next endpoint
+                }
+                
+                break; // Success, exit loop
+                
+            } catch (endpointError) {
+                console.log(`Endpoint ${endpoint} failed:`, endpointError.message);
+                lastError = endpointError;
+                continue; // Try next endpoint
+            }
+        }
+        
+        // If all endpoints failed
+        if (!calls || calls.length === 0) {
+            if (lastError) {
+                throw lastError; // Re-throw the last error for proper handling
+            } else {
+                return ctx.reply('📋 No calls found');
+            }
+        }
 
-    // Handle different response structures from your API
-    let calls = [];
-    if (response.data.calls) {
-      calls = response.data.calls;
-    } else if (Array.isArray(response.data)) {
-      calls = response.data;
-    } else {
-      console.log('Unexpected API response structure:', response.data);
-      return ctx.reply('❌ Error: Unexpected API response format');
+        console.log(`Successfully fetched ${calls.length} calls from: ${successfulEndpoint}`);
+
+        let message = `📋 *Recent Calls* (${calls.length})\n\n`;
+
+        calls.forEach((call, index) => {
+            const date = new Date(call.created_at).toLocaleDateString();
+            const duration = call.duration ? `${Math.floor(call.duration/60)}:${String(call.duration%60).padStart(2,'0')}` : 'N/A';
+            const status = call.status || 'Unknown';
+            const phoneNumber = call.phone_number;
+
+            // Escape special characters for Markdown
+            const escapedPhone = phoneNumber.replace(/[^\w\s+]/g, '\\$&');
+            const escapedStatus = status.replace(/[^\w\s]/g, '\\$&');
+
+            message += `${index + 1}\\. 📞 ${escapedPhone}\n`;
+            message += `   🆔 \`${call.call_sid}\`\n`;
+            message += `   📅 ${date} \\| ⏱️ ${duration} \\| 📊 ${escapedStatus}\n`;
+            message += `   💬 ${call.transcript_count || 0} messages\n\n`;
+        });
+
+        message += `Use /transcript <call\\_sid> to view details`;
+
+        await ctx.reply(message, { parse_mode: 'Markdown' });
+
+    } catch (error) {
+        console.error('Error fetching calls list via callback:', error);
+        
+        // Provide specific error messages based on error type
+        if (error.response?.status === 404) {
+            await ctx.reply(
+                '❌ *API Endpoints Missing*\n\n' +
+                'The calls list endpoints are not available on the server\\.\n\n' +
+                '*Missing endpoints:*\n' +
+                '• `/api/calls` \\- Basic calls listing\n' +
+                '• `/api/calls/list` \\- Enhanced calls listing\n\n' +
+                'Please contact your system administrator to add these endpoints to the Express application\\.',
+                { parse_mode: 'Markdown' }
+            );
+        } else if (error.code === 'ECONNREFUSED' || error.code === 'ENOTFOUND') {
+            await ctx.reply(
+                `❌ *Server Connection Failed*\n\n` +
+                `Cannot connect to API server at:\n\`${config.apiUrl}\`\n\n` +
+                `Please check if the server is running\\.`,
+                { parse_mode: 'Markdown' }
+            );
+        } else if (error.response?.status === 500) {
+            await ctx.reply('❌ Server error while fetching calls. Please try again later.');
+        } else if (error.response) {
+            await ctx.reply(`❌ API error (${error.response.status}): ${error.response.data?.error || 'Unknown error'}`);
+        } else {
+            await ctx.reply('❌ Error fetching calls list. Please try again later.');
+        }
     }
-
-    if (!calls || calls.length === 0) {
-      return ctx.reply('📋 No calls found');
-    }
-
-    let message = `📋 *Recent Calls* \\(${calls.length}\\)\n\n`;
-
-    calls.forEach((call, index) => {
-      const date = new Date(call.created_at).toLocaleDateString();
-      const duration = call.duration ? `${Math.floor(call.duration/60)}:${String(call.duration%60).padStart(2,'0')}` : 'N/A';
-      const status = escapeMarkdown(call.status || 'Unknown');
-      const phoneNumber = escapeMarkdown(call.phone_number);
-
-      message += `${index + 1}\\. 📞 ${phoneNumber}\n`;
-      message += `   🆔 \`${call.call_sid}\`\n`;
-      message += `   📅 ${date} \\| ⏱️ ${duration} \\| 📊 ${status}\n`;
-      message += `   💬 ${call.transcript_count || 0} messages\n\n`;
-    });
-
-    message += `Use /transcript <call\\_sid> to view details`;
-
-    await ctx.reply(message, { parse_mode: 'Markdown' });
-
-  } catch (error) {
-    console.error('Error fetching calls list:', error);
-    
-    if (error.response) {
-      console.error('API Response Status:', error.response.status);
-      console.error('API Response Data:', error.response.data);
-      
-      if (error.response.status === 404) {
-        await ctx.reply('❌ API endpoint not found. Please check the server configuration.');
-      } else if (error.response.status === 500) {
-        await ctx.reply('❌ Server error while fetching calls. Please try again later.');
-      } else {
-        await ctx.reply(`❌ API error (${error.response.status}): ${error.response.data?.error || 'Unknown error'}`);
-      }
-    } else if (error.code === 'ECONNREFUSED' || error.code === 'ENOTFOUND') {
-      await ctx.reply('❌ Cannot connect to API server. Please check if the server is running.');
-    } else {
-      await ctx.reply('❌ Error fetching calls list. Please try again later.');
-    }
-  }
 }
+
 
 module.exports = (bot) => {
   // Transcript command
