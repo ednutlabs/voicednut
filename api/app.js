@@ -1599,6 +1599,406 @@ app.get('/api/calls/search', async (req, res) => {
   }
 });
 
+// Basic calls list endpoint
+app.get('/api/calls', async (req, res) => {
+  try {
+    const limit = Math.min(parseInt(req.query.limit) || 10, 50); // Max 50 calls
+    const offset = parseInt(req.query.offset) || 0;
+    
+    console.log(`Fetching calls list: limit=${limit}, offset=${offset}`);
+    
+    // Get calls from database using the new method
+    const calls = await db.getRecentCalls(limit, offset);
+    const totalCount = await db.getCallsCount();
+
+    // Format the response with enhanced data
+    const formattedCalls = calls.map(call => ({
+      ...call,
+      transcript_count: call.transcript_count || 0,
+      created_date: new Date(call.created_at).toLocaleDateString(),
+      duration_formatted: call.duration ? 
+        `${Math.floor(call.duration/60)}:${String(call.duration%60).padStart(2,'0')}` : 
+        'N/A',
+      // Parse JSON fields safely
+      business_context: call.business_context ? 
+        (() => { try { return JSON.parse(call.business_context); } catch { return null; } })() : 
+        null,
+      generated_functions: call.generated_functions ?
+        (() => { try { return JSON.parse(call.generated_functions); } catch { return []; } })() :
+        []
+    }));
+
+    res.json({
+      success: true,
+      calls: formattedCalls,
+      pagination: {
+        total: totalCount,
+        limit: limit,
+        offset: offset,
+        has_more: offset + limit < totalCount
+      },
+      enhanced_features: true
+    });
+
+  } catch (error) {
+    console.error('Error fetching calls list:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to fetch calls list',
+      details: error.message
+    });
+  }
+});
+
+// Enhanced calls list endpoint with filters
+app.get('/api/calls/list', async (req, res) => {
+  try {
+    const limit = Math.min(parseInt(req.query.limit) || 10, 50);
+    const offset = parseInt(req.query.offset) || 0;
+    const status = req.query.status; // Filter by status
+    const phone = req.query.phone; // Filter by phone number
+    const dateFrom = req.query.date_from; // Filter by date range
+    const dateTo = req.query.date_to;
+
+    let whereClause = '';
+    let queryParams = [];
+    
+    // Build dynamic where clause
+    const conditions = [];
+    
+    if (status) {
+      conditions.push('c.status = ?');
+      queryParams.push(status);
+    }
+    
+    if (phone) {
+      conditions.push('c.phone_number LIKE ?');
+      queryParams.push(`%${phone}%`);
+    }
+    
+    if (dateFrom) {
+      conditions.push('c.created_at >= ?');
+      queryParams.push(dateFrom);
+    }
+    
+    if (dateTo) {
+      conditions.push('c.created_at <= ?');
+      queryParams.push(dateTo);
+    }
+    
+    if (conditions.length > 0) {
+      whereClause = 'WHERE ' + conditions.join(' AND ');
+    }
+
+    const query = `
+      SELECT 
+        c.*,
+        COUNT(t.id) as transcript_count,
+        GROUP_CONCAT(DISTINCT t.speaker) as speakers,
+        MIN(t.timestamp) as conversation_start,
+        MAX(t.timestamp) as conversation_end
+      FROM calls c
+      LEFT JOIN transcripts t ON c.call_sid = t.call_sid
+      ${whereClause}
+      GROUP BY c.call_sid
+      ORDER BY c.created_at DESC
+      LIMIT ? OFFSET ?
+    `;
+
+    queryParams.push(limit, offset);
+    
+    const calls = await new Promise((resolve, reject) => {
+      db.db.all(query, queryParams, (err, rows) => {
+        if (err) {
+          console.error('Database error in enhanced calls query:', err);
+          reject(err);
+        } else {
+          resolve(rows || []);
+        }
+      });
+    });
+
+    // Get filtered count
+    const countQuery = `SELECT COUNT(*) as count FROM calls c ${whereClause}`;
+    const totalCount = await new Promise((resolve, reject) => {
+      db.db.get(countQuery, queryParams.slice(0, -2), (err, row) => {
+        if (err) {
+          console.error('Database error counting filtered calls:', err);
+          resolve(0);
+        } else {
+          resolve(row?.count || 0);
+        }
+      });
+    });
+
+    // Enhanced formatting
+    const enhancedCalls = calls.map(call => {
+      const hasConversation = call.speakers && call.speakers.includes('user') && call.speakers.includes('ai');
+      const conversationDuration = call.conversation_start && call.conversation_end ?
+        Math.round((new Date(call.conversation_end) - new Date(call.conversation_start)) / 1000) : 0;
+
+      return {
+        call_sid: call.call_sid,
+        phone_number: call.phone_number,
+        status: call.status,
+        twilio_status: call.twilio_status,
+        created_at: call.created_at,
+        started_at: call.started_at,
+        ended_at: call.ended_at,
+        duration: call.duration,
+        transcript_count: call.transcript_count || 0,
+        has_conversation: hasConversation,
+        conversation_duration: conversationDuration,
+        call_summary: call.call_summary,
+        user_chat_id: call.user_chat_id,
+        // Enhanced metadata
+        business_context: call.business_context ? 
+          (() => { try { return JSON.parse(call.business_context); } catch { return null; } })() : null,
+        generated_functions_count: call.generated_functions ?
+          (() => { try { return JSON.parse(call.generated_functions).length; } catch { return 0; } })() : 0,
+        // Formatted fields
+        created_date: new Date(call.created_at).toLocaleDateString(),
+        created_time: new Date(call.created_at).toLocaleTimeString(),
+        duration_formatted: call.duration ? 
+          `${Math.floor(call.duration/60)}:${String(call.duration%60).padStart(2,'0')}` : 'N/A',
+        status_icon: getStatusIcon(call.status),
+        enhanced: true
+      };
+    });
+
+    res.json({
+      success: true,
+      calls: enhancedCalls,
+      filters: {
+        status,
+        phone,
+        date_from: dateFrom,
+        date_to: dateTo
+      },
+      pagination: {
+        total: totalCount,
+        limit: limit,
+        offset: offset,
+        has_more: offset + limit < totalCount,
+        current_page: Math.floor(offset / limit) + 1,
+        total_pages: Math.ceil(totalCount / limit)
+      },
+      enhanced_features: true
+    });
+
+  } catch (error) {
+    console.error('Error in enhanced calls list:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to fetch enhanced calls list',
+      details: error.message
+    });
+  }
+});
+
+// Helper function for status icons
+function getStatusIcon(status) {
+  const icons = {
+    'completed': '✅',
+    'no-answer': '📵',
+    'busy': '📞',
+    'failed': '❌',
+    'canceled': '🚫',
+    'in-progress': '🔄',
+    'ringing': '📲'
+  };
+  return icons[status] || '❓';
+}
+
+// Add calls analytics endpoint
+app.get('/api/calls/analytics', async (req, res) => {
+  try {
+    const days = parseInt(req.query.days) || 7;
+    const dateFrom = new Date(Date.now() - (days * 24 * 60 * 60 * 1000)).toISOString();
+
+    // Get comprehensive analytics
+    const analytics = await new Promise((resolve, reject) => {
+      const queries = {
+        // Total calls in period
+        totalCalls: `SELECT COUNT(*) as count FROM calls WHERE created_at >= ?`,
+        
+        // Calls by status
+        statusBreakdown: `
+          SELECT status, COUNT(*) as count 
+          FROM calls 
+          WHERE created_at >= ? 
+          GROUP BY status 
+          ORDER BY count DESC
+        `,
+        
+        // Average call duration
+        avgDuration: `
+          SELECT AVG(duration) as avg_duration 
+          FROM calls 
+          WHERE created_at >= ? AND duration > 0
+        `,
+        
+        // Success rate (completed calls with conversation)
+        successRate: `
+          SELECT 
+            COUNT(CASE WHEN c.status = 'completed' AND t.transcript_count > 0 THEN 1 END) as successful,
+            COUNT(*) as total
+          FROM calls c
+          LEFT JOIN (
+            SELECT call_sid, COUNT(*) as transcript_count 
+            FROM transcripts 
+            WHERE speaker = 'user' 
+            GROUP BY call_sid
+          ) t ON c.call_sid = t.call_sid
+          WHERE c.created_at >= ?
+        `,
+        
+        // Daily call volume
+        dailyVolume: `
+          SELECT 
+            DATE(created_at) as date,
+            COUNT(*) as calls,
+            COUNT(CASE WHEN status = 'completed' THEN 1 END) as completed
+          FROM calls 
+          WHERE created_at >= ? 
+          GROUP BY DATE(created_at) 
+          ORDER BY date DESC
+        `
+      };
+
+      const results = {};
+      let completed = 0;
+      const total = Object.keys(queries).length;
+
+      for (const [key, query] of Object.entries(queries)) {
+        db.db.all(query, [dateFrom], (err, rows) => {
+          if (err) {
+            console.error(`Analytics query error for ${key}:`, err);
+            results[key] = null;
+          } else {
+            results[key] = rows;
+          }
+          
+          completed++;
+          if (completed === total) {
+            resolve(results);
+          }
+        });
+      }
+    });
+
+    // Process analytics data
+    const processedAnalytics = {
+      period: {
+        days: days,
+        from: dateFrom,
+        to: new Date().toISOString()
+      },
+      summary: {
+        total_calls: analytics.totalCalls?.[0]?.count || 0,
+        average_duration: analytics.avgDuration?.[0]?.avg_duration ? 
+          Math.round(analytics.avgDuration[0].avg_duration) : 0,
+        success_rate: analytics.successRate?.[0] ? 
+          Math.round((analytics.successRate[0].successful / analytics.successRate[0].total) * 100) : 0
+      },
+      status_breakdown: analytics.statusBreakdown || [],
+      daily_volume: analytics.dailyVolume || [],
+      enhanced_features: true
+    };
+
+    res.json(processedAnalytics);
+
+  } catch (error) {
+    console.error('Error fetching call analytics:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to fetch analytics',
+      details: error.message
+    });
+  }
+});
+
+// Search calls endpoint
+app.get('/api/calls/search', async (req, res) => {
+  try {
+    const query = req.query.q;
+    const limit = Math.min(parseInt(req.query.limit) || 20, 50);
+    
+    if (!query || query.length < 2) {
+      return res.status(400).json({
+        success: false,
+        error: 'Search query must be at least 2 characters'
+      });
+    }
+
+    // Search in calls and transcripts
+    const searchResults = await new Promise((resolve, reject) => {
+      const searchQuery = `
+        SELECT DISTINCT
+          c.*,
+          COUNT(t.id) as transcript_count,
+          GROUP_CONCAT(t.message, ' ') as conversation_text
+        FROM calls c
+        LEFT JOIN transcripts t ON c.call_sid = t.call_sid
+        WHERE 
+          c.phone_number LIKE ? OR
+          c.call_summary LIKE ? OR
+          c.prompt LIKE ? OR
+          c.first_message LIKE ? OR
+          t.message LIKE ?
+        GROUP BY c.call_sid
+        ORDER BY c.created_at DESC
+        LIMIT ?
+      `;
+      
+      const searchTerm = `%${query}%`;
+      const params = [searchTerm, searchTerm, searchTerm, searchTerm, searchTerm, limit];
+      
+      db.db.all(searchQuery, params, (err, rows) => {
+        if (err) {
+          console.error('Search query error:', err);
+          reject(err);
+        } else {
+          resolve(rows || []);
+        }
+      });
+    });
+
+    const formattedResults = searchResults.map(call => ({
+      call_sid: call.call_sid,
+      phone_number: call.phone_number,
+      status: call.status,
+      created_at: call.created_at,
+      duration: call.duration,
+      transcript_count: call.transcript_count || 0,
+      call_summary: call.call_summary,
+      // Highlight matching text (basic implementation)
+      matching_text: call.conversation_text ? 
+        call.conversation_text.substring(0, 200) + '...' : null,
+      created_date: new Date(call.created_at).toLocaleDateString(),
+      duration_formatted: call.duration ? 
+        `${Math.floor(call.duration/60)}:${String(call.duration%60).padStart(2,'0')}` : 'N/A'
+    }));
+
+    res.json({
+      success: true,
+      query: query,
+      results: formattedResults,
+      result_count: formattedResults.length,
+      enhanced_search: true
+    });
+
+  } catch (error) {
+    console.error('Error in call search:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Search failed',
+      details: error.message
+    });
+  }
+});
+
+
 startServer();
 
 // Enhanced graceful shutdown with comprehensive cleanup
