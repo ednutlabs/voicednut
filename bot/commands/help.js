@@ -11,11 +11,6 @@ module.exports = (bot) => {
                 return ctx.reply('❌ You are not authorized to use this bot.');
             }
 
-            const adminStatus = await new Promise(r => isAdmin(ctx.from.id, r));
-            if (!adminStatus) {
-                return ctx.reply('❌ This command is for administrators only.');
-            }
-
             const isOwner = await new Promise(r => isAdmin(ctx.from.id, r));
             
             const basicCommands = `📱 *Basic Commands*
