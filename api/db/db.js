@@ -67,6 +67,20 @@ class EnhancedDatabase {
                 FOREIGN KEY(call_sid) REFERENCES calls(call_sid)
             )`,
 
+            // Add backward compatibility table name
+            `CREATE TABLE IF NOT EXISTS transcripts (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                call_sid TEXT NOT NULL,
+                speaker TEXT NOT NULL CHECK(speaker IN ('user', 'ai')),
+                message TEXT NOT NULL,
+                interaction_count INTEGER,
+                timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
+                personality_used TEXT,
+                adaptation_data TEXT,
+                confidence_score REAL,
+                FOREIGN KEY(call_sid) REFERENCES calls(call_sid)
+            )`,
+
             // Enhanced call states for comprehensive real-time tracking
             `CREATE TABLE IF NOT EXISTS call_states (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -166,11 +180,14 @@ class EnhancedDatabase {
             'CREATE INDEX IF NOT EXISTS idx_calls_twilio_status ON calls(twilio_status)',
             'CREATE INDEX IF NOT EXISTS idx_calls_phone_number ON calls(phone_number)',
             
-            // Transcript indexes
+            // Transcript indexes for both table names
             'CREATE INDEX IF NOT EXISTS idx_transcripts_call_sid ON call_transcripts(call_sid)',
             'CREATE INDEX IF NOT EXISTS idx_transcripts_timestamp ON call_transcripts(timestamp)',
             'CREATE INDEX IF NOT EXISTS idx_transcripts_speaker ON call_transcripts(speaker)',
             'CREATE INDEX IF NOT EXISTS idx_transcripts_personality ON call_transcripts(personality_used)',
+            'CREATE INDEX IF NOT EXISTS idx_legacy_transcripts_call_sid ON transcripts(call_sid)',
+            'CREATE INDEX IF NOT EXISTS idx_legacy_transcripts_timestamp ON transcripts(timestamp)',
+            'CREATE INDEX IF NOT EXISTS idx_legacy_transcripts_speaker ON transcripts(speaker)',
             
             // State indexes
             'CREATE INDEX IF NOT EXISTS idx_states_call_sid ON call_states(call_sid)',
@@ -323,7 +340,7 @@ class EnhancedDatabase {
         });
     }
 
-    // Enhanced transcript with personality tracking
+    // Enhanced transcript with personality tracking (supports both table names)
     async addTranscript(transcriptData) {
         const { 
             call_sid, 
@@ -336,30 +353,82 @@ class EnhancedDatabase {
         } = transcriptData;
         
         return new Promise((resolve, reject) => {
-            const stmt = this.db.prepare(`
-                INSERT INTO call_transcripts (
-                    call_sid, speaker, message, interaction_count, 
-                    personality_used, adaptation_data, confidence_score
-                )
-                VALUES (?, ?, ?, ?, ?, ?, ?)
-            `);
+            // Insert into both tables for backward compatibility
+            const insertIntoTable = (tableName) => {
+                return new Promise((resolve, reject) => {
+                    const stmt = this.db.prepare(`
+                        INSERT INTO ${tableName} (
+                            call_sid, speaker, message, interaction_count, 
+                            personality_used, adaptation_data, confidence_score
+                        )
+                        VALUES (?, ?, ?, ?, ?, ?, ?)
+                    `);
+                    
+                    stmt.run([
+                        call_sid, 
+                        speaker, 
+                        message, 
+                        interaction_count,
+                        personality_used,
+                        adaptation_data,
+                        confidence_score
+                    ], function(err) {
+                        if (err) {
+                            reject(err);
+                        } else {
+                            resolve(this.lastID);
+                        }
+                    });
+                    stmt.finalize();
+                });
+            };
+
+            // Insert into both tables
+            Promise.all([
+                insertIntoTable('call_transcripts'),
+                insertIntoTable('transcripts')
+            ]).then((results) => {
+                resolve(results[0]); // Return the first table's lastID
+            }).catch(reject);
+        });
+    }
+
+    // NEW: Get recent calls with transcripts count (REQUIRED FOR API ENDPOINTS)
+    async getRecentCalls(limit = 10, offset = 0) {
+        return new Promise((resolve, reject) => {
+            const query = `
+                SELECT 
+                    c.*,
+                    COUNT(t.id) as transcript_count
+                FROM calls c
+                LEFT JOIN transcripts t ON c.call_sid = t.call_sid
+                GROUP BY c.call_sid
+                ORDER BY c.created_at DESC
+                LIMIT ? OFFSET ?
+            `;
             
-            stmt.run([
-                call_sid, 
-                speaker, 
-                message, 
-                interaction_count,
-                personality_used,
-                adaptation_data,
-                confidence_score
-            ], function(err) {
+            this.db.all(query, [limit, offset], (err, rows) => {
                 if (err) {
+                    console.error('Database error in getRecentCalls:', err);
                     reject(err);
                 } else {
-                    resolve(this.lastID);
+                    resolve(rows || []);
                 }
             });
-            stmt.finalize();
+        });
+    }
+
+    // NEW: Get total calls count (REQUIRED FOR API ENDPOINTS)
+    async getCallsCount() {
+        return new Promise((resolve, reject) => {
+            this.db.get('SELECT COUNT(*) as count FROM calls', (err, row) => {
+                if (err) {
+                    console.error('Database error in getCallsCount:', err);
+                    reject(err);
+                } else {
+                    resolve(row?.count || 0);
+                }
+            });
         });
     }
 
@@ -623,11 +692,12 @@ class EnhancedDatabase {
         });
     }
 
-    // Get enhanced call transcripts
+    // Get enhanced call transcripts (supports both table names)
     async getCallTranscripts(call_sid) {
         return new Promise((resolve, reject) => {
+            // Try the legacy table first for backward compatibility
             const sql = `
-                SELECT * FROM call_transcripts 
+                SELECT * FROM transcripts 
                 WHERE call_sid = ? 
                 ORDER BY interaction_count ASC, timestamp ASC
             `;
@@ -651,7 +721,7 @@ class EnhancedDatabase {
                        COUNT(CASE WHEN ct.personality_used IS NOT NULL THEN 1 END) as personality_adaptations,
                        GROUP_CONCAT(DISTINCT ct.personality_used) as personalities_used
                 FROM calls c
-                LEFT JOIN call_transcripts ct ON c.call_sid = ct.call_sid
+                LEFT JOIN transcripts ct ON c.call_sid = ct.call_sid
                 GROUP BY c.call_sid
                 ORDER BY c.created_at DESC
                 LIMIT ?
@@ -953,6 +1023,8 @@ class EnhancedDatabase {
                 FROM calls
                 UNION ALL
                 SELECT 'call_transcripts', COUNT(*) FROM call_transcripts
+                UNION ALL
+                SELECT 'transcripts', COUNT(*) FROM transcripts
                 UNION ALL
                 SELECT 'call_states', COUNT(*) FROM call_states
                 UNION ALL
