@@ -1,6 +1,6 @@
 const config = require('../config');
 const axios = require('axios');
-const { getUser } = require('../db/db');
+const { getUser, isAdmin } = require('../db/db');
 
 // Function to escape Telegram Markdown special characters
 function escapeMarkdown(text) {
@@ -222,10 +222,15 @@ module.exports = (bot) => {
     try {
       // Check if user is authorized
       const user = await new Promise(r => getUser(ctx.from.id, r));
-      if (!user) {
-        return ctx.reply('❌ You are not authorized to use this bot.');
-      }
+            if (!user) {
+                return ctx.reply('❌ You are not authorized to use this bot.');
+            }
 
+            const adminStatus = await new Promise(r => isAdmin(ctx.from.id, r));
+            if (!adminStatus) {
+                return ctx.reply('❌ This command is for administrators only.');
+            }
+      
       const args = ctx.message.text.split(' ');
       
       if (args.length < 2) {
@@ -252,9 +257,14 @@ module.exports = (bot) => {
     try {
       // Check if user is authorized
       const user = await new Promise(r => getUser(ctx.from.id, r));
-      if (!user) {
-        return ctx.reply('❌ You are not authorized to use this bot.');
-      }
+            if (!user) {
+                return ctx.reply('❌ You are not authorized to use this bot.');
+            }
+
+            const adminStatus = await new Promise(r => isAdmin(ctx.from.id, r));
+            if (!adminStatus) {
+                return ctx.reply('❌ This command is for administrators only.');
+            }
 
       const args = ctx.message.text.split(' ');
       const limit = args.length > 1 ? parseInt(args[1]) || 10 : 10;
@@ -278,11 +288,17 @@ module.exports = (bot) => {
   // Full transcript command for longer transcripts
   bot.command('fullTranscript', async (ctx) => {
     try {
+      // Check if user is authorized
       const user = await new Promise(r => getUser(ctx.from.id, r));
-      if (!user) {
-        return ctx.reply('❌ You are not authorized to use this bot.');
-      }
+            if (!user) {
+                return ctx.reply('❌ You are not authorized to use this bot.');
+            }
 
+            const adminStatus = await new Promise(r => isAdmin(ctx.from.id, r));
+            if (!adminStatus) {
+                return ctx.reply('❌ This command is for administrators only.');
+            }
+      
       const args = ctx.message.text.split(' ');
       
       if (args.length < 2) {
