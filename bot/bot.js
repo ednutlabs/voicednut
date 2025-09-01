@@ -254,6 +254,7 @@ async function executeHelpCommand(ctx) {
         }
         
         helpText += `
+        
 📖 <b>Quick Usage</b>
 1. Use /call or click 📞 Call button
 2. Enter phone number (E.164 format: +1234567890)
