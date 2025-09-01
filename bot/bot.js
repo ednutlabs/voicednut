@@ -222,7 +222,17 @@ bot.on('callback_query:data', async (ctx) => {
 
 // Command execution functions for inline buttons
 async function executeHelpCommand(ctx, isAdminUser) {
-    let helpText = `📱 <b>Basic Commands</b>
+        try {
+            // Check if user is authorized
+            const user = await new Promise(r => getUser(ctx.from.id, r));
+            if (!user) {
+                return ctx.reply('❌ You are not authorized to use this bot.');
+            }
+
+            const isOwner = await new Promise(r => isAdmin(ctx.from.id, r));
+            
+            // Build help text using HTML formatting (more reliable)
+            let helpText = `📱 <b>Basic Commands</b>
 • /start - Restart bot &amp; show main menu
 • /call - Start a new voice call
 • /transcript &lt;call_sid&gt; - Get call transcript
