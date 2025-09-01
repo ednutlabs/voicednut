@@ -1,4 +1,4 @@
-const { getUser, promoteUser } = require('../db/db');
+const { getUser, promoteUser, isAdmin } = require('../db/db');
 
 async function promoteFlow(conversation, ctx) {
     try {
@@ -39,20 +39,15 @@ async function promoteFlow(conversation, ctx) {
 function registerPromoteCommand(bot) {
     bot.command('promote', async (ctx) => {
         try {
-            const user = await new Promise((resolve, reject) => {
-                getUser(ctx.from.id, (err, result) => {
-                    if (err) {
-                        console.error('Database error in getUser:', err);
-                        reject(err);
-                    } else {
-                        resolve(result);
-                    }
-                });
-            });
-            
-            if (!user || user.role !== 'ADMIN') {
-                await ctx.reply('❌ Admin only.');
-                return;
+                       // Check if user is authorized and is admin
+            const user = await new Promise(r => getUser(ctx.from.id, r));
+            if (!user) {
+                return ctx.reply('❌ You are not authorized to use this bot.');
+            }
+
+            const adminStatus = await new Promise(r => isAdmin(ctx.from.id, r));
+            if (!adminStatus) {
+                return ctx.reply('❌ This command is for administrators only.');
             }
             
             await ctx.conversation.enter("promote-conversation");
