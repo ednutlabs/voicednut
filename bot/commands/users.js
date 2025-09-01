@@ -30,9 +30,9 @@ module.exports = (bot) => {
                 getUserList((err, result) => {
                     if (err) {
                         console.error('Database error in getUserList:', err);
-                        reject(err);
+                        resolve([]); // Resolve with empty array instead of rejecting
                     } else {
-                        resolve(result);
+                        resolve(result || []); // Ensure we always resolve with an array
                     }
                 });
             });
