@@ -1,4 +1,4 @@
-const { getUser, addUser } = require('../db/db');
+const { getUser, addUser, isAdmin } = require('../db/db');
 
 async function addUserFlow(conversation, ctx) {
     try {
@@ -54,19 +54,15 @@ async function addUserFlow(conversation, ctx) {
 function registerAddUserCommand(bot) {
     bot.command(['adduser', 'authorize'], async (ctx) => {
         try {
-            const user = await new Promise((resolve, reject) => {
-                getUser(ctx.from.id, (err, result) => {
-                    if (err) {
-                        console.error('Database error in getUser:', err);
-                        reject(err);
-                    } else {
-                        resolve(result);
-                    }
-                });
-            });
-            
-            if (!user || user.role !== 'ADMIN') {
-                return ctx.reply('❌ Admin only.');
+            // Check if user is authorized and is admin
+            const user = await new Promise(r => getUser(ctx.from.id, r));
+            if (!user) {
+                return ctx.reply('❌ You are not authorized to use this bot.');
+            }
+
+            const adminStatus = await new Promise(r => isAdmin(ctx.from.id, r));
+            if (!adminStatus) {
+                return ctx.reply('❌ This command is for administrators only.');
             }
             
             await ctx.conversation.enter("adduser-conversation");

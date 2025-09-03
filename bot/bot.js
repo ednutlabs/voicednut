@@ -221,66 +221,78 @@ bot.on('callback_query:data', async (ctx) => {
 });
 
 // Command execution functions for inline buttons
-async function executeHelpCommand(ctx, isAdminUser) {
-    const basicCommands = `📱 *Basic Commands*
-• /start - Restart bot & show main menu
+async function executeHelpCommand(ctx) {
+    try {
+        // Check if user is authorized
+        const user = await new Promise(r => getUser(ctx.from.id, r));
+        if (!user) {
+            return ctx.reply('❌ You are not authorized to use this bot.');
+        }
+        const isOwner = await new Promise(r => isAdmin(ctx.from.id, r));
+        
+        // Build help text using HTML formatting (more reliable)
+        let helpText = `📱 <b>Basic Commands</b>
+• /start - Restart bot &amp; show main menu
 • /call - Start a new voice call
-• /transcript <call_sid> - Get call transcript
+• /transcript &lt;call_sid&gt; - Get call transcript
 • /calls [limit] - List recent calls (max 50)
-• /health or /ping - Check bot & API health
+• /health or /ping - Check bot &amp; API health
 • /guide - Show detailed usage guide
 • /menu - Show quick action buttons
-• /help - Show this help message\n`;
-
-    const adminCommands = `\n👑 *Admin Commands*
+• /help - Show this help message`;
+        
+        if (isOwner) {
+            helpText += `
+            
+👑 <b>Admin Commands</b>
 • /adduser - Add new authorized user
 • /promote - Promote user to admin
 • /removeuser - Remove user access
 • /users - List all authorized users
 • /status - Full system status check
-• /test_api - Test API connection\n`;
-
-    const usageGuide = `\n📖 *Quick Usage*
+• /testapi - Test API connection`;
+        }
+        
+        helpText += `
+        
+📖 <b>Quick Usage</b>
 1. Use /call or click 📞 Call button
 2. Enter phone number (E.164 format: +1234567890)
 3. Define agent behavior/prompt
 4. Set initial message to be spoken
-5. Monitor call progress and receive notifications\n`;
+5. Monitor call progress and receive notifications
 
-    const examples = `\n💡 *Examples*
+💡 <b>Examples</b>
 • Phone format: +1234567890 (not 123-456-7890)
 • Get transcript: /transcript CA1234567890abcdef
 • List calls: /calls 20
-• Check health: /health\n`;
-
-    const supportInfo = `\n🆘 *Support & Info*
+• Check health: /health
+        
+🆘 <b>Support &amp; Info</b>
 • Contact admin: @${config.admin.username}
 • Bot version: 2.0.0
 • For issues or questions, contact support`;
-
-    const kb = new InlineKeyboard()
+        
+        const kb = new InlineKeyboard()
         .text('📞 New Call', 'CALL')
         .text('📋 Menu', 'MENU')
         .row()
         .text('📚 Full Guide', 'GUIDE');
-
-    if (isAdminUser) {
-        kb.row()
+        
+        if (isOwner) {
+            kb.row()
             .text('👥 Users', 'USERS')
             .text('➕ Add User', 'ADDUSER');
-    }
-
-    await ctx.reply(
-        basicCommands +
-        (isAdminUser ? adminCommands : '') +
-        usageGuide +
-        examples +
-        supportInfo,
-        {
-            parse_mode: 'Markdown',
-            reply_markup: kb
         }
-    );
+        
+        await ctx.reply(helpText, {
+            parse_mode: 'HTML',
+            reply_markup: kb
+        });
+    } catch (error) {
+        console.error('Help command error:', error);
+        await ctx.reply('❌ Error displaying help. Please try again.');
+    }
 }
 
 async function executeUsersCommand(ctx) {
@@ -487,15 +499,64 @@ async function executeCallsCommand(ctx) {
     const axios = require('axios');
     
     try {
-        const response = await axios.get(`${config.apiUrl}/api/calls?limit=10`, {
-            timeout: 15000
-        });
+        console.log('Executing calls command via callback...');
+        
+        let response;
+        let calls = [];
+        
+        // Try multiple API endpoints in order of preference
+        const endpoints = [
+            `${config.apiUrl}/api/calls/list?limit=10`,  // Enhanced endpoint
+            `${config.apiUrl}/api/calls?limit=10`,       // Basic endpoint
+        ];
+        
+        let lastError = null;
+        let successfulEndpoint = null;
+        
+        for (const endpoint of endpoints) {
+            try {
+                console.log(`Trying endpoint: ${endpoint}`);
+                
+                response = await axios.get(endpoint, {
+                    timeout: 15000,
+                    headers: {
+                        'Accept': 'application/json',
+                        'Content-Type': 'application/json'
+                    }
+                });
 
-        const calls = response.data.calls || [];
-
-        if (!calls || calls.length === 0) {
-            return ctx.reply('📋 No calls found');
+                console.log(`Success! API Response status: ${response.status}`);
+                successfulEndpoint = endpoint;
+                
+                // Handle different response structures
+                if (response.data.calls) {
+                    calls = response.data.calls;
+                } else if (Array.isArray(response.data)) {
+                    calls = response.data;
+                } else {
+                    console.log('Unexpected response structure:', Object.keys(response.data));
+                    continue; // Try next endpoint
+                }
+                
+                break; // Success, exit loop
+                
+            } catch (endpointError) {
+                console.log(`Endpoint ${endpoint} failed:`, endpointError.message);
+                lastError = endpointError;
+                continue; // Try next endpoint
+            }
         }
+        
+        // If all endpoints failed
+        if (!calls || calls.length === 0) {
+            if (lastError) {
+                throw lastError; // Re-throw the last error for proper handling
+            } else {
+                return ctx.reply('📋 No calls found');
+            }
+        }
+
+        console.log(`Successfully fetched ${calls.length} calls from: ${successfulEndpoint}`);
 
         let message = `📋 *Recent Calls* (${calls.length})\n\n`;
 
@@ -505,9 +566,13 @@ async function executeCallsCommand(ctx) {
             const status = call.status || 'Unknown';
             const phoneNumber = call.phone_number;
 
-            message += `${index + 1}\\. 📞 ${phoneNumber.replace(/[^\w\s+]/g, '\\$&')}\n`;
+            // Escape special characters for Markdown
+            const escapedPhone = phoneNumber.replace(/[^\w\s+]/g, '\\$&');
+            const escapedStatus = status.replace(/[^\w\s]/g, '\\$&');
+
+            message += `${index + 1}\\. 📞 ${escapedPhone}\n`;
             message += `   🆔 \`${call.call_sid}\`\n`;
-            message += `   📅 ${date} \\| ⏱️ ${duration} \\| 📊 ${status.replace(/[^\w\s]/g, '\\$&')}\n`;
+            message += `   📅 ${date} \\| ⏱️ ${duration} \\| 📊 ${escapedStatus}\n`;
             message += `   💬 ${call.transcript_count || 0} messages\n\n`;
         });
 
@@ -516,8 +581,33 @@ async function executeCallsCommand(ctx) {
         await ctx.reply(message, { parse_mode: 'Markdown' });
 
     } catch (error) {
-        console.error('Error fetching calls list:', error);
-        await ctx.reply('❌ Error fetching calls list. Please try again later.');
+        console.error('Error fetching calls list via callback:', error);
+        
+        // Provide specific error messages based on error type
+        if (error.response?.status === 404) {
+            await ctx.reply(
+                '❌ *API Endpoints Missing*\n\n' +
+                'The calls list endpoints are not available on the server\\.\n\n' +
+                '*Missing endpoints:*\n' +
+                '• `/api/calls` \\- Basic calls listing\n' +
+                '• `/api/calls/list` \\- Enhanced calls listing\n\n' +
+                'Please contact your system administrator to add these endpoints to the Express application\\.',
+                { parse_mode: 'Markdown' }
+            );
+        } else if (error.code === 'ECONNREFUSED' || error.code === 'ENOTFOUND') {
+            await ctx.reply(
+                `❌ *Server Connection Failed*\n\n` +
+                `Cannot connect to API server at:\n\`${config.apiUrl}\`\n\n` +
+                `Please check if the server is running\\.`,
+                { parse_mode: 'Markdown' }
+            );
+        } else if (error.response?.status === 500) {
+            await ctx.reply('❌ Server error while fetching calls. Please try again later.');
+        } else if (error.response) {
+            await ctx.reply(`❌ API error (${error.response.status}): ${error.response.data?.error || 'Unknown error'}`);
+        } else {
+            await ctx.reply('❌ Error fetching calls list. Please try again later.');
+        }
     }
 }
 

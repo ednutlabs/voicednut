@@ -1,5 +1,5 @@
 {
-  "name": "voice-call-bot",
+  "name": "bot",
   "version": "2.0.0",
   "description": "Telegram bot for making AI-powered voice calls",
   "main": "bot.js",

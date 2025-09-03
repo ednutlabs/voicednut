@@ -1,28 +1,18 @@
-const { getUserList, getUser } = require('../db/db');
+const { getUserList, getUser, isAdmin } = require('../db/db');
 
 module.exports = (bot) => {
     bot.command('users', async (ctx) => {
         try {
             // Check authorization first
-            const user = await new Promise((resolve, reject) => {
-                getUser(ctx.from.id, (err, result) => {
-                    if (err) {
-                        console.error('Database error in getUser:', err);
-                        reject(err);
-                    } else {
-                        resolve(result);
-                    }
-                });
-            });
-
+                        // Check if user is authorized and is admin
+            const user = await new Promise(r => getUser(ctx.from.id, r));
             if (!user) {
-                await ctx.reply('❌ You are not authorized to use this bot.');
-                return;
+                return ctx.reply('❌ You are not authorized to use this bot.');
             }
 
-            if (user.role !== 'ADMIN') {
-                await ctx.reply('❌ This command is for administrators only.');
-                return;
+            const adminStatus = await new Promise(r => isAdmin(ctx.from.id, r));
+            if (!adminStatus) {
+                return ctx.reply('❌ This command is for administrators only.');
             }
 
             // Get users list with proper error handling
@@ -30,9 +20,9 @@ module.exports = (bot) => {
                 getUserList((err, result) => {
                     if (err) {
                         console.error('Database error in getUserList:', err);
-                        reject(err);
+                        resolve([]); // Resolve with empty array instead of rejecting
                     } else {
-                        resolve(result);
+                        resolve(result || []); // Ensure we always resolve with an array
                     }
                 });
             });
