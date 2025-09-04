@@ -1,6 +1,6 @@
 const config = require('../config');
 const axios = require('axios');
-
+const { getUser } = require('../db/db');
 // Simple phone number validation to match E.164 format
 function isValidPhoneNumber(number) {
     // Basic E.164 validation: starts with + followed by 1-15 digits
