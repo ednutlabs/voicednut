@@ -231,7 +231,7 @@ app.ws('/connection', (ws) => {
             
             const firstMessage = callConfig ? 
               callConfig.first_message : 
-              'Hello! I understand you\'re looking for a pair of AirPods, is that correct?';
+              'Hello! what\'s your name and how can i help you today?';
             
             try {
               await db.addTranscript({
