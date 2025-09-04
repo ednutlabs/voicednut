@@ -4,7 +4,7 @@ module.exports = {
       name: 'BOT',
       script: './bot.js',
       cwd: '/home/ubuntu/voicednut/bot', // Update with your actual path
-      instances: 1, // You can scale this if needed
+      instances: 2, // You can scale this if needed
       exec_mode: 'fork', // Use 'cluster' for load balancing if needed
       
       // Environment variables
