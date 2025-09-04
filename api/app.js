@@ -202,7 +202,7 @@ app.ws('/connection', (ws) => {
             
             const firstMessage = callConfig ? 
               callConfig.first_message : 
-              'Hello! I understand you\'re looking for a pair of AirPods, is that correct?';
+              'Hello! what\'s your name and how can i help you today?';
             
             console.log(`🗣️ First message (${functionSystem?.context.industry || 'default'}): ${firstMessage.substring(0, 50)}...`.magenta);
             
