@@ -33,7 +33,7 @@ module.exports = (bot) => {
 • /removeuser - Remove user access
 • /users - List all authorized users
 • /status - Full system status check
-• /test_api - Test API connection`;
+• /testapi - Test API connection`;
             }
 
             helpText += `
