@@ -34,13 +34,19 @@ bower_components
 # node-waf configuration
 .lock-wscript
 
+# pm2 configuration files
+api/ecosystem.config.js
+bot/ecosystem.config.js
+
 # Compiled binary addons (https://nodejs.org/api/addons.html)
 build/Release
 
 init.sh
 
+# Database directories
 bot/db/data.db
 api/db/data.db
+
 # Dependency directories
 node_modules/
 jspm_packages/
