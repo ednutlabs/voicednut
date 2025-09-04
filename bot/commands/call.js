@@ -10,6 +10,12 @@ function isValidPhoneNumber(number) {
 
 async function callFlow(conversation, ctx) {
     try {
+        // Check if user is authorized
+        const user = await new Promise(r => getUser(ctx.from.id, r));
+        if (!user) {
+            return ctx.reply('❌ You are not authorized to use this bot.');
+        }
+
         // Step 1: Get phone number
         await ctx.reply('📞 Enter phone number (E.164 format, e.g., +16125151442):');
 
