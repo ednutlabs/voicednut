@@ -426,7 +426,7 @@ async function getSmsStats(ctx) {
         
         // Fallback: try to get basic stats
         try {
-            const basicResponse = await axios.get(`${config.apiUrl}/api/sms/stats`, { timeout: 5000 });
+            const basicResponse = await axios.get(`${config.apiUrl}/api/sms/database-stats`, { timeout: 5000 });
             if (basicResponse.data.success) {
                 const stats = basicResponse.data.statistics;
                 const basicStatsText = 
