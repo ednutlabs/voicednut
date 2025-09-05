@@ -2174,8 +2174,8 @@ app.post('/webhook/sms-delivery', async (req, res) => {
 // Get SMS statistics
 app.get('/api/sms/stats', async (req, res) => {
   try {
-    const stats = SmsService.getStatistics();
-    const activeConversations = SmsService.getActiveConversations();
+    const stats = smsService.getStatistics();
+    const activeConversations = smsService.getActiveConversations();
     
     res.json({
       success: true,
