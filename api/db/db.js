@@ -20,7 +20,7 @@ class EnhancedDatabase {
                 this.createEnhancedTables().then(() => {
                     this.initializeSMSTables().then(() => {
                         this.isInitialized = true;
-                        console.log('✅ Enhanced database initialization complete'.green);
+                        console.log('✅ Enhanced database initialization complete');
                         resolve();
                     }).catch(reject);
                 }).catch(reject);
@@ -111,7 +111,7 @@ class EnhancedDatabase {
                 FOREIGN KEY(call_sid) REFERENCES calls(call_sid)
             )`,
 
-            // Notification delivery metrics for analytics
+            // Notification delivery metrics for analytics - FIXED: Added UNIQUE constraint
             `CREATE TABLE IF NOT EXISTS notification_metrics (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 date TEXT NOT NULL,
@@ -145,10 +145,10 @@ class EnhancedDatabase {
                 FOREIGN KEY(call_sid) REFERENCES calls(call_sid)
             )`,
 
-            // Enhanced user sessions tracking
+            // Enhanced user sessions tracking - FIXED: Added UNIQUE constraint
             `CREATE TABLE IF NOT EXISTS user_sessions (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
-                telegram_chat_id TEXT NOT NULL,
+                telegram_chat_id TEXT NOT NULL UNIQUE,
                 session_start DATETIME DEFAULT CURRENT_TIMESTAMP,
                 session_end DATETIME,
                 total_calls INTEGER DEFAULT 0,
@@ -566,42 +566,66 @@ class EnhancedDatabase {
         return this.getEnhancedPendingWebhookNotifications(50);
     }
 
-    // Enhanced notification metrics logging
+    // FIXED: Enhanced notification metrics logging - Using INSERT OR REPLACE instead of ON CONFLICT
     async logNotificationMetric(notification_type, success, delivery_time_ms = null) {
         const today = new Date().toISOString().split('T')[0];
         
         return new Promise((resolve, reject) => {
-            // Use UPSERT logic for SQLite
-            const stmt = this.db.prepare(`
-                INSERT INTO notification_metrics 
-                    (date, notification_type, total_count, success_count, failure_count, avg_delivery_time_ms, updated_at)
-                VALUES (?, ?, 1, ?, ?, ?, datetime('now'))
-                ON CONFLICT(date, notification_type) DO UPDATE SET
-                    total_count = total_count + 1,
-                    success_count = success_count + excluded.success_count,
-                    failure_count = failure_count + excluded.failure_count,
-                    avg_delivery_time_ms = (avg_delivery_time_ms * (total_count - 1) + excluded.avg_delivery_time_ms) / total_count,
-                    updated_at = datetime('now')
-            `);
-            
-            const success_increment = success ? 1 : 0;
-            const failure_increment = success ? 0 : 1;
-            const delivery_time = delivery_time_ms || 0;
-            
-            stmt.run([
-                today, 
-                notification_type, 
-                success_increment, 
-                failure_increment, 
-                delivery_time
-            ], function(err) {
-                if (err) {
-                    reject(err);
-                } else {
-                    resolve(this.lastID || this.changes);
+            // First try to get existing record
+            this.db.get(
+                'SELECT * FROM notification_metrics WHERE date = ? AND notification_type = ?',
+                [today, notification_type],
+                (err, existingRow) => {
+                    if (err) {
+                        reject(err);
+                        return;
+                    }
+
+                    const success_increment = success ? 1 : 0;
+                    const failure_increment = success ? 0 : 1;
+                    const delivery_time = delivery_time_ms || 0;
+
+                    if (existingRow) {
+                        // Update existing record
+                        const new_total = existingRow.total_count + 1;
+                        const new_success = existingRow.success_count + success_increment;
+                        const new_failure = existingRow.failure_count + failure_increment;
+                        const new_avg_delivery = ((existingRow.avg_delivery_time_ms * existingRow.total_count) + delivery_time) / new_total;
+
+                        const stmt = this.db.prepare(`
+                            UPDATE notification_metrics 
+                            SET total_count = ?, success_count = ?, failure_count = ?, 
+                                avg_delivery_time_ms = ?, updated_at = datetime('now')
+                            WHERE id = ?
+                        `);
+                        
+                        stmt.run([new_total, new_success, new_failure, new_avg_delivery, existingRow.id], function(err) {
+                            if (err) {
+                                reject(err);
+                            } else {
+                                resolve(this.changes);
+                            }
+                        });
+                        stmt.finalize();
+                    } else {
+                        // Insert new record
+                        const stmt = this.db.prepare(`
+                            INSERT INTO notification_metrics 
+                            (date, notification_type, total_count, success_count, failure_count, avg_delivery_time_ms)
+                            VALUES (?, ?, 1, ?, ?, ?)
+                        `);
+                        
+                        stmt.run([today, notification_type, success_increment, failure_increment, delivery_time], function(err) {
+                            if (err) {
+                                reject(err);
+                            } else {
+                                resolve(this.lastID);
+                            }
+                        });
+                        stmt.finalize();
+                    }
                 }
-            });
-            stmt.finalize();
+            );
         });
     }
 
@@ -643,39 +667,60 @@ class EnhancedDatabase {
         });
     }
 
-    // User session tracking
+    // FIXED: User session tracking - Using INSERT OR REPLACE instead of ON CONFLICT
     async updateUserSession(telegram_chat_id, call_outcome = null) {
         return new Promise((resolve, reject) => {
-            const today = new Date().toISOString().split('T')[0];
-            
-            const stmt = this.db.prepare(`
-                INSERT INTO user_sessions 
-                    (telegram_chat_id, session_start, total_calls, successful_calls, failed_calls, last_activity)
-                VALUES (?, datetime('now'), 1, ?, ?, datetime('now'))
-                ON CONFLICT(telegram_chat_id) DO UPDATE SET
-                    total_calls = total_calls + 1,
-                    successful_calls = successful_calls + ?,
-                    failed_calls = failed_calls + ?,
-                    last_activity = datetime('now')
-            `);
-            
-            const success_increment = (call_outcome === 'completed') ? 1 : 0;
-            const failure_increment = (call_outcome && call_outcome !== 'completed') ? 1 : 0;
-            
-            stmt.run([
-                telegram_chat_id,
-                success_increment,
-                failure_increment,
-                success_increment,
-                failure_increment
-            ], function(err) {
-                if (err) {
-                    reject(err);
-                } else {
-                    resolve(this.lastID || this.changes);
+            // First try to get existing session
+            this.db.get(
+                'SELECT * FROM user_sessions WHERE telegram_chat_id = ?',
+                [telegram_chat_id],
+                (err, existingSession) => {
+                    if (err) {
+                        reject(err);
+                        return;
+                    }
+
+                    const success_increment = (call_outcome === 'completed') ? 1 : 0;
+                    const failure_increment = (call_outcome && call_outcome !== 'completed') ? 1 : 0;
+
+                    if (existingSession) {
+                        // Update existing session
+                        const stmt = this.db.prepare(`
+                            UPDATE user_sessions 
+                            SET total_calls = total_calls + 1,
+                                successful_calls = successful_calls + ?,
+                                failed_calls = failed_calls + ?,
+                                last_activity = datetime('now')
+                            WHERE telegram_chat_id = ?
+                        `);
+                        
+                        stmt.run([success_increment, failure_increment, telegram_chat_id], function(err) {
+                            if (err) {
+                                reject(err);
+                            } else {
+                                resolve(this.changes);
+                            }
+                        });
+                        stmt.finalize();
+                    } else {
+                        // Insert new session
+                        const stmt = this.db.prepare(`
+                            INSERT INTO user_sessions 
+                            (telegram_chat_id, total_calls, successful_calls, failed_calls, last_activity)
+                            VALUES (?, 1, ?, ?, datetime('now'))
+                        `);
+                        
+                        stmt.run([telegram_chat_id, success_increment, failure_increment], function(err) {
+                            if (err) {
+                                reject(err);
+                            } else {
+                                resolve(this.lastID);
+                            }
+                        });
+                        stmt.finalize();
+                    }
                 }
-            });
-            stmt.finalize();
+            );
         });
     }
 
@@ -791,439 +836,494 @@ class EnhancedDatabase {
                     }
                     
                     if (deliveryTimeCount > 0) {
-                        analytics.avg_delivery_time_ms = (totalDeliveryTime / deliveryTimeCount).toFixed(2);
-                    }
-                    
-                    resolve(analytics);
-                }
-            });
-        });
-    }
+                       analytics.avg_delivery_time_ms = (totalDeliveryTime / deliveryTimeCount).toFixed(2);
+                   }
+                   
+                   resolve(analytics);
+               }
+           });
+       });
+   }
 
-    // Get comprehensive call statistics
-    async getEnhancedCallStats(hours = 24) {
-        return new Promise((resolve, reject) => {
-            const sql = `
-                SELECT 
-                    COUNT(*) as total_calls,
-                    COUNT(CASE WHEN status = 'completed' THEN 1 END) as completed_calls,
-                    COUNT(CASE WHEN status = 'failed' THEN 1 END) as failed_calls,
-                    COUNT(CASE WHEN status = 'busy' THEN 1 END) as busy_calls,
-                    COUNT(CASE WHEN status = 'no-answer' THEN 1 END) as no_answer_calls,
-                    AVG(duration) as avg_duration,
-                    AVG(answer_delay) as avg_answer_delay,
-                    AVG(ring_duration) as avg_ring_duration,
-                    COUNT(CASE WHEN created_at >= datetime('now', '-${hours} hours') THEN 1 END) as recent_calls,
-                    COUNT(DISTINCT user_chat_id) as unique_users
-                FROM calls
-            `;
-            
-            this.db.get(sql, [], (err, row) => {
-                if (err) {
-                    reject(err);
-                } else {
-                    // Calculate success rate
-                    const successRate = row.total_calls > 0 ? 
-                        ((row.completed_calls / row.total_calls) * 100).toFixed(2) : 0;
-                    
-                    resolve({
-                        ...row,
-                        success_rate: successRate,
-                        period_hours: hours
-                    });
-                }
-            });
-        });
-    }
+   // Get comprehensive call statistics
+   async getEnhancedCallStats(hours = 24) {
+       return new Promise((resolve, reject) => {
+           const sql = `
+               SELECT 
+                   COUNT(*) as total_calls,
+                   COUNT(CASE WHEN status = 'completed' THEN 1 END) as completed_calls,
+                   COUNT(CASE WHEN status = 'failed' THEN 1 END) as failed_calls,
+                   COUNT(CASE WHEN status = 'busy' THEN 1 END) as busy_calls,
+                   COUNT(CASE WHEN status = 'no-answer' THEN 1 END) as no_answer_calls,
+                   AVG(duration) as avg_duration,
+                   AVG(answer_delay) as avg_answer_delay,
+                   AVG(ring_duration) as avg_ring_duration,
+                   COUNT(CASE WHEN created_at >= datetime('now', '-${hours} hours') THEN 1 END) as recent_calls,
+                   COUNT(DISTINCT user_chat_id) as unique_users
+               FROM calls
+           `;
+           
+           this.db.get(sql, [], (err, row) => {
+               if (err) {
+                   reject(err);
+               } else {
+                   // Calculate success rate
+                   const successRate = row.total_calls > 0 ? 
+                       ((row.completed_calls / row.total_calls) * 100).toFixed(2) : 0;
+                   
+                   resolve({
+                       ...row,
+                       success_rate: successRate,
+                       period_hours: hours
+                   });
+               }
+           });
+       });
+   }
 
-    // Get service health summary
-    async getServiceHealthSummary(hours = 24) {
-        return new Promise((resolve, reject) => {
-            const sql = `
-                SELECT 
-                    service_name,
-                    status,
-                    COUNT(*) as count,
-                    MAX(timestamp) as last_occurrence
-                FROM service_health_logs 
-                WHERE timestamp >= datetime('now', '-${hours} hours')
-                GROUP BY service_name, status
-                ORDER BY service_name, status
-            `;
-            
-            this.db.all(sql, [], (err, rows) => {
-                if (err) {
-                    reject(err);
-                } else {
-                    const summary = {
-                        period_hours: hours,
-                        services: {},
-                        total_events: 0
-                    };
-                    
-                    rows.forEach(row => {
-                        if (!summary.services[row.service_name]) {
-                            summary.services[row.service_name] = {};
-                        }
-                        summary.services[row.service_name][row.status] = {
-                            count: row.count,
-                            last_occurrence: row.last_occurrence
-                        };
-                        summary.total_events += row.count;
-                    });
-                    
-                    resolve(summary);
-                }
-            });
-        });
-    }
+   // Get service health summary
+   async getServiceHealthSummary(hours = 24) {
+       return new Promise((resolve, reject) => {
+           const sql = `
+               SELECT 
+                   service_name,
+                   status,
+                   COUNT(*) as count,
+                   MAX(timestamp) as last_occurrence
+               FROM service_health_logs 
+               WHERE timestamp >= datetime('now', '-${hours} hours')
+               GROUP BY service_name, status
+               ORDER BY service_name, status
+           `;
+           
+           this.db.all(sql, [], (err, rows) => {
+               if (err) {
+                   reject(err);
+               } else {
+                   const summary = {
+                       period_hours: hours,
+                       services: {},
+                       total_events: 0
+                   };
+                   
+                   rows.forEach(row => {
+                       if (!summary.services[row.service_name]) {
+                           summary.services[row.service_name] = {};
+                       }
+                       summary.services[row.service_name][row.status] = {
+                           count: row.count,
+                           last_occurrence: row.last_occurrence
+                       };
+                       summary.total_events += row.count;
+                   });
+                   
+                   resolve(summary);
+               }
+           });
+       });
+   }
 
-    // Create SMS messages table
-    async initializeSMSTables() {
-        return new Promise((resolve, reject) => {
-            const createSMSTable = `CREATE TABLE IF NOT EXISTS sms_messages ( id INTEGER PRIMARY KEY AUTOINCREMENT, message_sid TEXT UNIQUE NOT NULL, to_number TEXT, from_number TEXT, body TEXT NOT NULL, status TEXT DEFAULT 'queued', direction TEXT NOT NULL, -- 'inbound' or 'outbound' error_code TEXT, error_message TEXT, ai_response TEXT, response_message_sid TEXT, user_chat_id TEXT, created_at DATETIME DEFAULT CURRENT_TIMESTAMP, updated_at DATETIME DEFAULT CURRENT_TIMESTAMP );`;
+   // Create SMS messages table
+   async initializeSMSTables() {
+       return new Promise((resolve, reject) => {
+           const createSMSTable = `CREATE TABLE IF NOT EXISTS sms_messages (
+               id INTEGER PRIMARY KEY AUTOINCREMENT,
+               message_sid TEXT UNIQUE NOT NULL,
+               to_number TEXT,
+               from_number TEXT,
+               body TEXT NOT NULL,
+               status TEXT DEFAULT 'queued',
+               direction TEXT NOT NULL CHECK(direction IN ('inbound', 'outbound')),
+               error_code TEXT,
+               error_message TEXT,
+               ai_response TEXT,
+               response_message_sid TEXT,
+               user_chat_id TEXT,
+               created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+               updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+           )`;
 
-            const createBulkSMSTable = `
-              CREATE TABLE IF NOT EXISTS bulk_sms_operations (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                total_recipients INTEGER NOT NULL,
-                successful INTEGER DEFAULT 0,
-                failed INTEGER DEFAULT 0,
-                message TEXT NOT NULL,
-                user_chat_id TEXT,
-                created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-              );
-            `;
+           const createBulkSMSTable = `CREATE TABLE IF NOT EXISTS bulk_sms_operations (
+               id INTEGER PRIMARY KEY AUTOINCREMENT,
+               total_recipients INTEGER NOT NULL,
+               successful INTEGER DEFAULT 0,
+               failed INTEGER DEFAULT 0,
+               message TEXT NOT NULL,
+               user_chat_id TEXT,
+               created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+           )`;
 
-            this.db.serialize(() => {
-                this.db.run(createSMSTable);
-                this.db.run(createBulkSMSTable, (err) => {
-                    if (err) reject(err);
-                    else resolve();
-                });
-            });
-        });
-    }
+           this.db.serialize(() => {
+               this.db.run(createSMSTable, (err) => {
+                   if (err) {
+                       console.error('Error creating SMS table:', err);
+                       reject(err);
+                       return;
+                   }
+               });
+               
+               this.db.run(createBulkSMSTable, (err) => {
+                   if (err) {
+                       console.error('Error creating bulk SMS table:', err);
+                       reject(err);
+                   } else {
+                       console.log('✅ SMS tables created successfully');
+                       resolve();
+                   }
+               });
+           });
+       });
+   }
 
-    // Save SMS message
-    async saveSMSMessage(messageData) {
-        return new Promise((resolve, reject) => {
-            const sql = `INSERT INTO sms_messages ( message_sid, to_number, from_number, body, status,  direction, ai_response, response_message_sid, user_chat_id ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`;
+   // Save SMS message
+   async saveSMSMessage(messageData) {
+       return new Promise((resolve, reject) => {
+           const sql = `INSERT INTO sms_messages (
+               message_sid, to_number, from_number, body, status, 
+               direction, ai_response, response_message_sid, user_chat_id
+           ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`;
 
-            this.db.run(sql, [
-                messageData.message_sid,
-                messageData.to_number || null,
-                messageData.from_number || null,
-                messageData.body,
-                messageData.status || 'queued',
-                messageData.direction,
-                messageData.ai_response || null,
-                messageData.response_message_sid || null,
-                messageData.user_chat_id || null
-            ], function (err) {
-                if (err) reject(err);
-                else resolve(this.lastID);
-            });
-        });
-    }
+           this.db.run(sql, [
+               messageData.message_sid,
+               messageData.to_number || null,
+               messageData.from_number || null,
+               messageData.body,
+               messageData.status || 'queued',
+               messageData.direction,
+               messageData.ai_response || null,
+               messageData.response_message_sid || null,
+               messageData.user_chat_id || null
+           ], function (err) {
+               if (err) {
+                   console.error('Error saving SMS message:', err);
+                   reject(err);
+               } else {
+                   resolve(this.lastID);
+               }
+           });
+       });
+   }
 
-    // Update SMS status
-    async updateSMSStatus(messageSid, statusData) {
-        return new Promise((resolve, reject) => {
-            const sql = `UPDATE sms_messages  SET status = ?, error_code = ?, error_message = ?, updated_at = CURRENT_TIMESTAMP WHERE message_sid = ?`;
+   // Update SMS status
+   async updateSMSStatus(messageSid, statusData) {
+       return new Promise((resolve, reject) => {
+           const sql = `UPDATE sms_messages 
+               SET status = ?, error_code = ?, error_message = ?, updated_at = CURRENT_TIMESTAMP 
+               WHERE message_sid = ?`;
 
-            this.db.run(sql, [
-                statusData.status,
-                statusData.error_code || null,
-                statusData.error_message || null,
-                messageSid
-            ], function (err) {
-                if (err) reject(err);
-                else resolve(this.changes);
-            });
-        });
-    }
+           this.db.run(sql, [
+               statusData.status,
+               statusData.error_code || null,
+               statusData.error_message || null,
+               messageSid
+           ], function (err) {
+               if (err) {
+                   console.error('Error updating SMS status:', err);
+                   reject(err);
+               } else {
+                   resolve(this.changes);
+               }
+           });
+       });
+   }
 
-    // Log bulk SMS operation
-    async logBulkSMSOperation(operationData) {
-        return new Promise((resolve, reject) => {
-            const sql = `INSERT INTO bulk_sms_operations ( total_recipients, successful, failed, message, user_chat_id ) VALUES (?, ?, ?, ?, ?)`;
+   // Log bulk SMS operation
+   async logBulkSMSOperation(operationData) {
+       return new Promise((resolve, reject) => {
+           const sql = `INSERT INTO bulk_sms_operations (
+               total_recipients, successful, failed, message, user_chat_id
+           ) VALUES (?, ?, ?, ?, ?)`;
 
-            this.db.run(sql, [
-                operationData.total_recipients,
-                operationData.successful,
-                operationData.failed,
-                operationData.message,
-                operationData.user_chat_id || null
-            ], function (err) {
-                if (err) reject(err);
-                else resolve(this.lastID);
-            });
-        });
-    }
+           this.db.run(sql, [
+               operationData.total_recipients,
+               operationData.successful,
+               operationData.failed,
+               operationData.message,
+               operationData.user_chat_id || null
+           ], function (err) {
+               if (err) {
+                   console.error('Error logging bulk SMS operation:', err);
+                   reject(err);
+               } else {
+                   resolve(this.lastID);
+               }
+           });
+       });
+   }
 
-    // Get SMS messages
-    async getSMSMessages(limit = 50, offset = 0) {
-        return new Promise((resolve, reject) => {
-            const sql = `SELECT * FROM sms_messages  ORDER BY created_at DESC  LIMIT ? OFFSET ?`;
+   // Get SMS messages
+   async getSMSMessages(limit = 50, offset = 0) {
+       return new Promise((resolve, reject) => {
+           const sql = `SELECT * FROM sms_messages 
+               ORDER BY created_at DESC 
+               LIMIT ? OFFSET ?`;
 
-            this.db.all(sql, [limit, offset], (err, rows) => {
-                if (err) reject(err);
-                else resolve(rows || []);
-            });
-        });
-    }
+           this.db.all(sql, [limit, offset], (err, rows) => {
+               if (err) {
+                   console.error('Error getting SMS messages:', err);
+                   reject(err);
+               } else {
+                   resolve(rows || []);
+               }
+           });
+       });
+   }
 
-    // Get SMS conversation
-    async getSMSConversation(phoneNumber, limit = 50) {
-        return new Promise((resolve, reject) => {
-            const sql = `SELECT * FROM sms_messages  WHERE to_number = ? OR from_number = ? ORDER BY created_at ASC  LIMIT ?`;
+   // Get SMS conversation
+   async getSMSConversation(phoneNumber, limit = 50) {
+       return new Promise((resolve, reject) => {
+           const sql = `SELECT * FROM sms_messages 
+               WHERE to_number = ? OR from_number = ? 
+               ORDER BY created_at ASC 
+               LIMIT ?`;
 
-            this.db.all(sql, [phoneNumber, phoneNumber, limit], (err, rows) => {
-                if (err) reject(err);
-                else resolve(rows || []);
-            });
-        });
-    }
+           this.db.all(sql, [phoneNumber, phoneNumber, limit], (err, rows) => {
+               if (err) {
+                   console.error('Error getting SMS conversation:', err);
+                   reject(err);
+               } else {
+                   resolve(rows || []);
+               }
+           });
+       });
+   }
 
-    // Comprehensive cleanup with enhanced metrics
-    async cleanupOldRecords(daysToKeep = 30) {
-        const tables = [
-            { name: 'call_states', dateField: 'timestamp' },
-            { name: 'service_health_logs', dateField: 'timestamp' },
-            { name: 'call_metrics', dateField: 'timestamp' },
-            { name: 'notification_metrics', dateField: 'created_at' }
-        ];
-        
-        let totalCleaned = 0;
-        const cleanupResults = {};
-        
-        for (const table of tables) {
-            const cleaned = await new Promise((resolve, reject) => {
-                const sql = `
-                    DELETE FROM ${table.name} 
-                    WHERE ${table.dateField} < datetime('now', '-${daysToKeep} days')
-                `;
-                
-                this.db.run(sql, function(err) {
-                    if (err) {
-                        reject(err);
-                    } else {
-                        resolve(this.changes);
-                    }
-                });
-            });
-            
-            cleanupResults[table.name] = cleaned;
-            totalCleaned += cleaned;
-            
-            if (cleaned > 0) {
-                console.log(`🧹 Cleaned ${cleaned} old records from ${table.name}`.gray);
-            }
-        }
-        
-        // Clean up old successful webhook notifications (keep for 7 days)
-        const webhooksCleaned = await new Promise((resolve, reject) => {
-            const sql = `
-                DELETE FROM webhook_notifications 
-                WHERE status = 'sent' 
-                AND created_at < datetime('now', '-7 days')
-            `;
-            
-            this.db.run(sql, function(err) {
-                if (err) {
-                    reject(err);
-                } else {
-                    resolve(this.changes);
-                }
-            });
-        });
-        
-        cleanupResults.webhook_notifications = webhooksCleaned;
-        totalCleaned += webhooksCleaned;
-        
-        if (webhooksCleaned > 0) {
-            console.log(`🧹 Cleaned ${webhooksCleaned} old successful webhook notifications`.gray);
-        }
-        
-        // Clean up old user sessions (keep for 90 days)
-        const sessionsCleaned = await new Promise((resolve, reject) => {
-            const sql = `
-                DELETE FROM user_sessions 
-                WHERE last_activity < datetime('now', '-90 days')
-            `;
-            
-            this.db.run(sql, function(err) {
-                if (err) {
-                    reject(err);
-                } else {
-                    resolve(this.changes);
-                }
-            });
-        });
-        
-        cleanupResults.user_sessions = sessionsCleaned;
-        totalCleaned += sessionsCleaned;
-        
-        if (sessionsCleaned > 0) {
-            console.log(`🧹 Cleaned ${sessionsCleaned} old user sessions`.gray);
-        }
-        
-        // Log cleanup operation
-        await this.logServiceHealth('database', 'cleanup_completed', {
-            total_cleaned: totalCleaned,
-            days_kept: daysToKeep,
-            breakdown: cleanupResults
-        });
-        
-        console.log(`✅ Enhanced cleanup completed: ${totalCleaned} total records cleaned`.green);
-        
-        return {
-            total_cleaned: totalCleaned,
-            breakdown: cleanupResults,
-            days_kept: daysToKeep
-        };
-    }
+   // Comprehensive cleanup with enhanced metrics
+   async cleanupOldRecords(daysToKeep = 30) {
+       const tables = [
+           { name: 'call_states', dateField: 'timestamp' },
+           { name: 'service_health_logs', dateField: 'timestamp' },
+           { name: 'call_metrics', dateField: 'timestamp' },
+           { name: 'notification_metrics', dateField: 'created_at' }
+       ];
+       
+       let totalCleaned = 0;
+       const cleanupResults = {};
+       
+       for (const table of tables) {
+           const cleaned = await new Promise((resolve, reject) => {
+               const sql = `DELETE FROM ${table.name} 
+                   WHERE ${table.dateField} < datetime('now', '-${daysToKeep} days')`;
+               
+               this.db.run(sql, function(err) {
+                   if (err) {
+                       reject(err);
+                   } else {
+                       resolve(this.changes);
+                   }
+               });
+           });
+           
+           cleanupResults[table.name] = cleaned;
+           totalCleaned += cleaned;
+           
+           if (cleaned > 0) {
+               console.log(`🧹 Cleaned ${cleaned} old records from ${table.name}`);
+           }
+       }
+       
+       // Clean up old successful webhook notifications (keep for 7 days)
+       const webhooksCleaned = await new Promise((resolve, reject) => {
+           const sql = `DELETE FROM webhook_notifications 
+               WHERE status = 'sent' 
+               AND created_at < datetime('now', '-7 days')`;
+           
+           this.db.run(sql, function(err) {
+               if (err) {
+                   reject(err);
+               } else {
+                   resolve(this.changes);
+               }
+           });
+       });
+       
+       cleanupResults.webhook_notifications = webhooksCleaned;
+       totalCleaned += webhooksCleaned;
+       
+       if (webhooksCleaned > 0) {
+           console.log(`🧹 Cleaned ${webhooksCleaned} old successful webhook notifications`);
+       }
+       
+       // Clean up old user sessions (keep for 90 days)
+       const sessionsCleaned = await new Promise((resolve, reject) => {
+           const sql = `DELETE FROM user_sessions 
+               WHERE last_activity < datetime('now', '-90 days')`;
+           
+           this.db.run(sql, function(err) {
+               if (err) {
+                   reject(err);
+               } else {
+                   resolve(this.changes);
+               }
+           });
+       });
+       
+       cleanupResults.user_sessions = sessionsCleaned;
+       totalCleaned += sessionsCleaned;
+       
+       if (sessionsCleaned > 0) {
+           console.log(`🧹 Cleaned ${sessionsCleaned} old user sessions`);
+       }
+       
+       // Log cleanup operation
+       await this.logServiceHealth('database', 'cleanup_completed', {
+           total_cleaned: totalCleaned,
+           days_kept: daysToKeep,
+           breakdown: cleanupResults
+       });
+       
+       console.log(`✅ Enhanced cleanup completed: ${totalCleaned} total records cleaned`);
+       
+       return {
+           total_cleaned: totalCleaned,
+           breakdown: cleanupResults,
+           days_kept: daysToKeep
+       };
+   }
 
-    // Database maintenance and optimization
-    async optimizeDatabase() {
-        return new Promise((resolve, reject) => {
-            console.log('🔧 Running database optimization...'.yellow);
-            
-            // Run VACUUM to reclaim space and defragment
-            this.db.run('VACUUM', (err) => {
-                if (err) {
-                    console.error('❌ Database VACUUM failed:', err);
-                    reject(err);
-                } else {
-                    // Run ANALYZE to update query planner statistics
-                    this.db.run('ANALYZE', (analyzeErr) => {
-                        if (analyzeErr) {
-                            console.error('❌ Database ANALYZE failed:', analyzeErr);
-                            reject(analyzeErr);
-                        } else {
-                            console.log('✅ Database optimization completed'.green);
-                            resolve(true);
-                        }
-                    });
-                }
-            });
-        });
-    }
+   // Database maintenance and optimization
+   async optimizeDatabase() {
+       return new Promise((resolve, reject) => {
+           console.log('🔧 Running database optimization...');
+           
+           // Run VACUUM to reclaim space and defragment
+           this.db.run('VACUUM', (err) => {
+               if (err) {
+                   console.error('❌ Database VACUUM failed:', err);
+                   reject(err);
+               } else {
+                   // Run ANALYZE to update query planner statistics
+                   this.db.run('ANALYZE', (analyzeErr) => {
+                       if (analyzeErr) {
+                           console.error('❌ Database ANALYZE failed:', analyzeErr);
+                           reject(analyzeErr);
+                       } else {
+                           console.log('✅ Database optimization completed');
+                           resolve(true);
+                       }
+                   });
+               }
+           });
+       });
+   }
 
-    // Get database size and performance metrics
-    async getDatabaseMetrics() {
-        return new Promise((resolve, reject) => {
-            const fs = require('fs');
-            
-            // Get file size
-            let fileSize = 0;
-            try {
-                const stats = fs.statSync(this.dbPath);
-                fileSize = stats.size;
-            } catch (e) {
-                console.warn('Could not get database file size:', e.message);
-            }
-            
-            // Get table counts
-            const sql = `
-                SELECT 
-                    'calls' as table_name,
-                    COUNT(*) as row_count
-                FROM calls
-                UNION ALL
-                SELECT 'call_transcripts', COUNT(*) FROM call_transcripts
-                UNION ALL
-                SELECT 'transcripts', COUNT(*) FROM transcripts
-                UNION ALL
-                SELECT 'call_states', COUNT(*) FROM call_states
-                UNION ALL
-                SELECT 'webhook_notifications', COUNT(*) FROM webhook_notifications
-                UNION ALL
-                SELECT 'notification_metrics', COUNT(*) FROM notification_metrics
-                UNION ALL
-                SELECT 'service_health_logs', COUNT(*) FROM service_health_logs
-                UNION ALL
-                SELECT 'call_metrics', COUNT(*) FROM call_metrics
-                UNION ALL
-                SELECT 'user_sessions', COUNT(*) FROM user_sessions
-            `;
-            
-            this.db.all(sql, [], (err, rows) => {
-                if (err) {
-                    reject(err);
-                } else {
-                    const metrics = {
-                        file_size_bytes: fileSize,
-                        file_size_mb: (fileSize / (1024 * 1024)).toFixed(2),
-                        table_counts: {},
-                        total_rows: 0
-                    };
-                    
-                    rows.forEach(row => {
-                        metrics.table_counts[row.table_name] = row.row_count;
-                        metrics.total_rows += row.row_count;
-                    });
-                    
-                    resolve(metrics);
-                }
-            });
-        });
-    }
+   // Get database size and performance metrics
+   async getDatabaseMetrics() {
+       return new Promise((resolve, reject) => {
+           const fs = require('fs');
+           
+           // Get file size
+           let fileSize = 0;
+           try {
+               const stats = fs.statSync(this.dbPath);
+               fileSize = stats.size;
+           } catch (e) {
+               console.warn('Could not get database file size:', e.message);
+           }
+           
+           // Get table counts
+           const sql = `
+               SELECT 
+                   'calls' as table_name,
+                   COUNT(*) as row_count
+               FROM calls
+               UNION ALL
+               SELECT 'call_transcripts', COUNT(*) FROM call_transcripts
+               UNION ALL
+               SELECT 'transcripts', COUNT(*) FROM transcripts
+               UNION ALL
+               SELECT 'call_states', COUNT(*) FROM call_states
+               UNION ALL
+               SELECT 'webhook_notifications', COUNT(*) FROM webhook_notifications
+               UNION ALL
+               SELECT 'notification_metrics', COUNT(*) FROM notification_metrics
+               UNION ALL
+               SELECT 'service_health_logs', COUNT(*) FROM service_health_logs
+               UNION ALL
+               SELECT 'call_metrics', COUNT(*) FROM call_metrics
+               UNION ALL
+               SELECT 'user_sessions', COUNT(*) FROM user_sessions
+               UNION ALL
+               SELECT 'sms_messages', COUNT(*) FROM sms_messages
+               UNION ALL
+               SELECT 'bulk_sms_operations', COUNT(*) FROM bulk_sms_operations
+           `;
+           
+           this.db.all(sql, [], (err, rows) => {
+               if (err) {
+                   reject(err);
+               } else {
+                   const metrics = {
+                       file_size_bytes: fileSize,
+                       file_size_mb: (fileSize / (1024 * 1024)).toFixed(2),
+                       table_counts: {},
+                       total_rows: 0
+                   };
+                   
+                   rows.forEach(row => {
+                       metrics.table_counts[row.table_name] = row.row_count;
+                       metrics.total_rows += row.row_count;
+                   });
+                   
+                   resolve(metrics);
+               }
+           });
+       });
+   }
 
-    // Enhanced close method with cleanup
-    async close() {
-        if (this.db) {
-            return new Promise((resolve) => {
-                // Log database shutdown
-                this.logServiceHealth('database', 'shutdown_initiated', {
-                    timestamp: new Date().toISOString()
-                }).then(() => {
-                    this.db.close((err) => {
-                        if (err) {
-                            console.error('Error closing enhanced database:', err);
-                        } else {
-                            console.log('✅ Enhanced database connection closed'.green);
-                        }
-                        resolve();
-                    });
-                }).catch(() => {
-                    // If logging fails, still close the database
-                    this.db.close((err) => {
-                        if (err) {
-                            console.error('Error closing enhanced database:', err);
-                        } else {
-                            console.log('✅ Enhanced database connection closed'.green);
-                        }
-                        resolve();
-                    });
-                });
-            });
-        }
-    }
+   // Enhanced close method with cleanup
+   async close() {
+       if (this.db) {
+           return new Promise((resolve) => {
+               // Log database shutdown
+               this.logServiceHealth('database', 'shutdown_initiated', {
+                   timestamp: new Date().toISOString()
+               }).then(() => {
+                   this.db.close((err) => {
+                       if (err) {
+                           console.error('Error closing enhanced database:', err);
+                       } else {
+                           console.log('✅ Enhanced database connection closed');
+                       }
+                       resolve();
+                   });
+               }).catch(() => {
+                   // If logging fails, still close the database
+                   this.db.close((err) => {
+                       if (err) {
+                           console.error('Error closing enhanced database:', err);
+                       } else {
+                           console.log('✅ Enhanced database connection closed');
+                       }
+                       resolve();
+                   });
+               });
+           });
+       }
+   }
 
-    // Health check method
-    async healthCheck() {
-        return new Promise((resolve, reject) => {
-            if (!this.isInitialized) {
-                reject(new Error('Database not initialized'));
-                return;
-            }
-            
-            // Simple query to test database connectivity
-            this.db.get('SELECT 1 as test', [], (err, row) => {
-                if (err) {
-                    reject(err);
-                } else {
-                    resolve({
-                        status: 'healthy',
-                        initialized: this.isInitialized,
-                        timestamp: new Date().toISOString()
-                    });
-                }
-            });
-        });
-    }
+   // Health check method
+   async healthCheck() {
+       return new Promise((resolve, reject) => {
+           if (!this.isInitialized) {
+               reject(new Error('Database not initialized'));
+               return;
+           }
+           
+           // Simple query to test database connectivity
+           this.db.get('SELECT 1 as test', [], (err, row) => {
+               if (err) {
+                   reject(err);
+               } else {
+                   resolve({
+                       status: 'healthy',
+                       initialized: this.isInitialized,
+                       timestamp: new Date().toISOString()
+                   });
+               }
+           });
+       });
+   }
 }
 
 module.exports = EnhancedDatabase;
