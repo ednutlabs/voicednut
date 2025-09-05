@@ -23,7 +23,10 @@ jobs:
           script: |
             cd /home/ubuntu/voicednut
             git pull origin main
-            npm install
-            pm2 startOrRestart api/ecosystem.config.js --env production
-            pm2 startOrRestart bot/ecosystem.config.js --env production
-            pm2 save
+              cd api
+              npm install
+              pm2 startOrRestart ecosystem.config.js --env production
+              cd ../bot
+              npm install
+              pm2 startOrRestart ecosystem.config.js --env production
+              pm2 save
