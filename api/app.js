@@ -2171,6 +2171,28 @@ app.post('/webhook/sms-delivery', async (req, res) => {
     }
 });
 
+// Get SMS statistics
+app.get('/api/sms/stats', async (req, res) => {
+  try {
+    const stats = EnhancedSmsService.getStatistics();
+    const activeConversations = EnhancedSmsService.getActiveConversations();
+    
+    res.json({
+      success: true,
+      statistics: stats,
+      active_conversations: activeConversations.slice(0, 20), // Last 20 conversations
+      sms_service_enabled: true
+    });
+    
+  } catch (error) {
+    console.error('❌ SMS stats error:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to get SMS statistics'
+    });
+  }
+});
+
 // Bulk SMS status endpoint
 app.get('/api/sms/bulk/status', async (req, res) => {
     try {
