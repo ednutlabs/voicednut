@@ -462,9 +462,8 @@ async function showSmsTemplates(ctx) {
                 const displayName = template.replace(/_/g, ' ').toUpperCase();
                 templatesText += `${index + 1}. ${displayName}\n`;
             });
-            
-            templatesText += 
-                `\n💡 **How to use templates:**\n` +
+            templatesText +=
+                `\n💡 *How to use templates:*\n` +
                 `• Use /smstemplate <name> to see template content\n` +
                 `• Example: /smstemplate welcome\n` +
                 `• Example: /smstemplate verification\n\n` +
@@ -809,7 +808,7 @@ function registerSmsCommands(bot) {
     });
 
     // NEW: Recent SMS messages command
-    bot.command('recentSMS', async ctx => {
+    bot.command('recentsms', async ctx => {
         try {
             const user = await new Promise(r => getUser(ctx.from.id, r));
             if (!user) {
