@@ -298,7 +298,8 @@ module.exports = (bot) => {
             if (!adminStatus) {
                 return ctx.reply('❌ This command is for administrators only.');
             }
-      
+            
+            
       const args = ctx.message.text.split(' ');
       
       if (args.length < 2) {

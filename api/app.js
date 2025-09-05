@@ -10,6 +10,7 @@ const { StreamService } = require('./routes/stream');
 const { TranscriptionService } = require('./routes/transcription');
 const { TextToSpeechService } = require('./routes/tts');
 const { recordingService } = require('./routes/recording');
+const { EnhancedSmsService } = require('./routes/sms.js');
 const Database = require('./db/db');
 const { webhookService } = require('./routes/status');
 const DynamicFunctionEngine = require('./functions/DynamicFunctionEngine');
@@ -31,6 +32,7 @@ const callFunctionSystems = new Map(); // Store generated functions per call
 
 let db;
 const functionEngine = new DynamicFunctionEngine();
+const smsService = new EnhancedSmsService();
 
 async function startServer() {
   try {
@@ -1598,6 +1600,309 @@ app.get('/api/calls/search', async (req, res) => {
     });
   }
 });
+
+// SMS webhook endpoints
+app.post('/webhook/sms', async (req, res) => {
+    try {
+        const { From, Body, MessageSid, SmsStatus } = req.body;
+
+        console.log(`📨 SMS webhook: ${From} -> ${Body}`);
+
+        // Handle incoming SMS with AI
+        const result = await smsService.handleIncomingSMS(From, Body, MessageSid);
+
+        // Save to database if needed
+        if (db) {
+            await db.saveSMSMessage({
+                message_sid: MessageSid,
+                from_number: From,
+                body: Body,
+                status: SmsStatus,
+                direction: 'inbound',
+                ai_response: result.ai_response,
+                response_message_sid: result.message_sid
+            });
+        }
+
+        res.status(200).send('OK');
+    } catch (error) {
+        console.error('❌ SMS webhook error:', error);
+        res.status(500).send('Error');
+    }
+});
+
+app.post('/webhook/sms-status', async (req, res) => {
+    try {
+        const { MessageSid, MessageStatus, ErrorCode, ErrorMessage } = req.body;
+
+        console.log(`📱 SMS status update: ${MessageSid} -> ${MessageStatus}`);
+
+        if (db) {
+            await db.updateSMSStatus(MessageSid, {
+                status: MessageStatus,
+                error_code: ErrorCode,
+                error_message: ErrorMessage,
+                updated_at: new Date()
+            });
+        }
+
+        res.status(200).send('OK');
+    } catch (error) {
+        console.error('❌ SMS status webhook error:', error);
+        res.status(500).send('OK'); // Return OK to prevent retries
+    }
+});
+
+// Send single SMS endpoint
+app.post('/api/sms/send', async (req, res) => {
+    try {
+        const { to, message, from, user_chat_id } = req.body;
+
+        if (!to || !message) {
+            return res.status(400).json({
+                success: false,
+                error: 'Phone number and message are required'
+            });
+        }
+
+        // Validate phone number format
+        if (!to.match(/^\+[1-9]\d{1,14}$/)) {
+            return res.status(400).json({
+                success: false,
+                error: 'Invalid phone number format. Use E.164 format (e.g., +1234567890)'
+            });
+        }
+
+        const result = await smsService.sendSMS(to, message, from);
+
+        // Save to database
+        if (db) {
+            await db.saveSMSMessage({
+                message_sid: result.message_sid,
+                to_number: to,
+                from_number: result.from,
+                body: message,
+                status: result.status,
+                direction: 'outbound',
+                user_chat_id: user_chat_id
+            });
+
+            // Create webhook notification
+            if (user_chat_id) {
+                await db.createEnhancedWebhookNotification(
+                    result.message_sid,
+                    'sms_sent',
+                    user_chat_id
+                );
+            }
+        }
+
+        res.json({
+            success: true,
+            ...result
+        });
+    } catch (error) {
+        console.error('❌ SMS send error:', error);
+        res.status(500).json({
+            success: false,
+            error: 'Failed to send SMS',
+            details: error.message
+        });
+    }
+});
+
+// Send bulk SMS endpoint
+app.post('/api/sms/bulk', async (req, res) => {
+    try {
+        const { recipients, message, options = {}, user_chat_id } = req.body;
+
+        if (!recipients || !Array.isArray(recipients) || recipients.length === 0) {
+            return res.status(400).json({
+                success: false,
+                error: 'Recipients array is required and must not be empty'
+            });
+        }
+
+        if (!message) {
+            return res.status(400).json({
+                success: false,
+                error: 'Message is required'
+            });
+        }
+
+        if (recipients.length > 100) {
+            return res.status(400).json({
+                success: false,
+                error: 'Maximum 100 recipients per bulk send'
+            });
+        }
+
+        const result = await smsService.sendBulkSMS(recipients, message, options);
+
+        // Log bulk operation
+        if (db) {
+            await db.logBulkSMSOperation({
+                total_recipients: result.total,
+                successful: result.successful,
+                failed: result.failed,
+                message: message,
+                user_chat_id: user_chat_id,
+                timestamp: new Date()
+            });
+        }
+
+        res.json({
+            success: true,
+            ...result
+        });
+    } catch (error) {
+        console.error('❌ Bulk SMS error:', error);
+        res.status(500).json({
+            success: false,
+            error: 'Failed to send bulk SMS',
+            details: error.message
+        });
+    }
+});
+
+// Schedule SMS endpoint
+app.post('/api/sms/schedule', async (req, res) => {
+    try {
+        const { to, message, scheduled_time, options = {} } = req.body;
+
+        if (!to || !message || !scheduled_time) {
+            return res.status(400).json({
+                success: false,
+                error: 'Phone number, message, and scheduled_time are required'
+            });
+        }
+
+        const scheduledDate = new Date(scheduled_time);
+        if (scheduledDate <= new Date()) {
+            return res.status(400).json({
+                success: false,
+                error: 'Scheduled time must be in the future'
+            });
+        }
+
+        const result = await smsService.scheduleSMS(to, message, scheduled_time, options);
+
+        res.json({
+            success: true,
+            ...result
+        });
+    } catch (error) {
+        console.error('❌ SMS schedule error:', error);
+        res.status(500).json({
+            success: false,
+            error: 'Failed to schedule SMS',
+            details: error.message
+        });
+    }
+});
+
+// Get SMS conversation
+app.get('/api/sms/conversation/:phone', async (req, res) => {
+    try {
+        const { phone } = req.params;
+        const conversation = smsService.getConversation(phone);
+
+        if (!conversation) {
+            return res.status(404).json({
+                success: false,
+                error: 'Conversation not found'
+            });
+        }
+
+        res.json({
+            success: true,
+            conversation: {
+                ...conversation,
+                messages: conversation.messages.slice(-50) // Last 50 messages
+            }
+        });
+    } catch (error) {
+        console.error('❌ Get conversation error:', error);
+        res.status(500).json({
+            success: false,
+            error: 'Failed to get conversation'
+        });
+    }
+});
+
+// Get SMS statistics
+app.get('/api/sms/stats', async (req, res) => {
+    try {
+        const stats = smsService.getStatistics();
+        const activeConversations = smsService.getActiveConversations();
+
+        res.json({
+            success: true,
+            statistics: stats,
+            active_conversations: activeConversations.slice(0, 20), // Last 20 conversations
+            sms_service_enabled: true
+        });
+    } catch (error) {
+        console.error('❌ SMS stats error:', error);
+        res.status(500).json({
+            success: false,
+            error: 'Failed to get SMS statistics'
+        });
+    }
+});
+
+// SMS templates endpoint
+app.get('/api/sms/templates', async (req, res) => {
+    try {
+        const { template_name, variables } = req.query;
+
+        if (template_name) {
+            try {
+                const parsedVariables = variables ? JSON.parse(variables) : {};
+                const template = smsService.getTemplate(template_name, parsedVariables);
+
+                res.json({
+                    success: true,
+                    template_name,
+                    template,
+                    variables: parsedVariables
+                });
+            } catch (templateError) {
+                res.status(400).json({
+                    success: false,
+                    error: templateError.message
+                });
+            }
+        } else {
+            // Return available templates
+            res.json({
+                success: true,
+                available_templates: [
+                    'welcome', 'appointment_reminder', 'verification', 'order_update',
+                    'payment_reminder', 'promotional', 'customer_service', 'survey'
+                ]
+            });
+        }
+    } catch (error) {
+        console.error('❌ SMS templates error:', error);
+        res.status(500).json({
+            success: false,
+            error: 'Failed to get templates'
+        });
+    }
+});
+
+// Start scheduled message processor
+setInterval(() => {
+    smsService.processScheduledMessages().catch(error => {
+        console.error('❌ Scheduled SMS processing error:', error);
+    });
+}, 60000); // Check every minute
+
+// Cleanup old conversations every hour
+setInterval(() => {
+    smsService.cleanupOldConversations(24); // Keep conversations for 24 hours
+}, 60 * 60 * 1000);
 
 startServer();
 

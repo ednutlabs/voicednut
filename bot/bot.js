@@ -44,18 +44,25 @@ const { callFlow, registerCallCommand } = require('./commands/call');
 const { addUserFlow, registerAddUserCommand } = require('./commands/adduser');
 const { promoteFlow, registerPromoteCommand } = require('./commands/promote');
 const { removeUserFlow, registerRemoveUserCommand } = require('./commands/removeuser');
+const { smsFlow, bulkSmsFlow, scheduleSmsFlow, registerSmsCommands } = require('./commands/sms');
+
 
 // Register conversations with error handling
 bot.use(wrapConversation(callFlow, "call-conversation"));
 bot.use(wrapConversation(addUserFlow, "adduser-conversation"));
 bot.use(wrapConversation(promoteFlow, "promote-conversation"));
 bot.use(wrapConversation(removeUserFlow, "remove-conversation"));
+bot.use(wrapConversation(scheduleSmsFlow, "schedule-sms-conversation"));
+bot.use(wrapConversation(smsFlow, "sms-conversation"));
+bot.use(wrapConversation(bulkSmsFlow, "bulk-sms-conversation"));
 
 // Register command handlers
 registerCallCommand(bot);
 registerAddUserCommand(bot);
 registerPromoteCommand(bot);
 registerRemoveUserCommand(bot);
+registerSmsCommands(bot);
+
 
 // Register non-conversation commands
 require('./commands/users')(bot);
@@ -100,6 +107,9 @@ bot.command('start', async (ctx) => {
         const kb = new InlineKeyboard()
             .text('📞 New Call', 'CALL')
             .text('📚 Guide', 'GUIDE')
+            .row()
+            .text('💬 New Sms', 'SMS')
+            .text('🏥 Health', 'HEALTH')            
             .row()
             .text('❔ Help', 'HELP')
             .text('📋 Menu', 'MENU');
@@ -154,7 +164,10 @@ bot.on('callback_query:data', async (ctx) => {
             'CALL': 'call-conversation',
             'ADDUSER': 'adduser-conversation',
             'PROMOTE': 'promote-conversation',
-            'REMOVE': 'remove-conversation'
+            'REMOVE': 'remove-conversation',
+            'SMS': 'sms-conversation',
+            'BULK_SMS': 'bulk-sms-conversation',
+            'SCHEDULE_SMS': 'schedule-sms-conversation'
         };
 
         if (conversations[action]) {
@@ -208,6 +221,29 @@ bot.on('callback_query:data', async (ctx) => {
             case 'CALLS':
                 await executeCallsCommand(ctx);
                 break;
+
+            case 'SMS':
+                await ctx.reply(`Starting SMS process...`);
+                await ctx.conversation.enter('sms-conversation');
+                break;
+                
+            case 'BULK_SMS':
+                if (isAdminUser) {
+                    await ctx.reply(`Starting bulk SMS process...`);
+                    await ctx.conversation.enter('bulk-sms-conversation');
+                }
+                break;
+            
+            case 'SCHEDULE_SMS':
+                await ctx.reply(`Starting SMS scheduling...`);
+                await ctx.conversation.enter('schedule-sms-conversation');
+                break;
+            
+                case 'SMS_STATS':
+                    if (isAdminUser) {
+                        await executeCommand(ctx, 'smsstats');
+                    }
+                    break;
                 
             default:
                 console.log(`Unknown callback action: ${action}`);
@@ -234,8 +270,12 @@ async function executeHelpCommand(ctx) {
         let helpText = `📱 <b>Basic Commands</b>
 • /start - Restart bot &amp; show main menu
 • /call - Start a new voice call
+• /sms - Send an SMS message
+• /smsconversation &lt;phone&gt; - View SMS conversation
 • /transcript &lt;call_sid&gt; - Get call transcript
 • /calls [limit] - List recent calls (max 50)
+• /smstemplates - View available SMS templates
+• /smstemplate &lt;name&gt; - View specific template
 • /health or /ping - Check bot &amp; API health
 • /guide - Show detailed usage guide
 • /menu - Show quick action buttons
@@ -249,6 +289,8 @@ async function executeHelpCommand(ctx) {
 • /promote - Promote user to admin
 • /removeuser - Remove user access
 • /users - List all authorized users
+• /bulksms - Send bulk SMS messages
+• /schedulesms - Schedule SMS for later
 • /status - Full system status check
 • /testapi - Test API connection`;
         }
@@ -277,6 +319,7 @@ async function executeHelpCommand(ctx) {
         .text('📞 New Call', 'CALL')
         .text('📋 Menu', 'MENU')
         .row()
+        .text('📱 New SMS', 'SMS')
         .text('📚 Full Guide', 'GUIDE');
         
         if (isOwner) {
@@ -373,7 +416,8 @@ Version: 2.0.0`;
         .text('📞 New Call', 'CALL')
         .text('📋 Commands', 'HELP')
         .row()
-        .text('🔄 Main Menu', 'MENU');
+        .text('🔄 Main Menu', 'MENU')
+        .text('New SMS', 'SMS');
 
     await ctx.reply(mainGuide, {
         parse_mode: 'Markdown',
@@ -384,7 +428,10 @@ Version: 2.0.0`;
 async function executeMenuCommand(ctx, isAdminUser) {
     const kb = new InlineKeyboard()
         .text('📞 New Call', 'CALL')
+        .text('📱 Send SMS', 'SMS')
+        .row()
         .text('📋 Recent Calls', 'CALLS')
+        .text('💬 SMS Stats', 'SMS_STATS')
         .row()
         .text('🏥 Health Check', 'HEALTH')
         .text('ℹ️ Help', 'HELP')
@@ -393,6 +440,9 @@ async function executeMenuCommand(ctx, isAdminUser) {
 
     if (isAdminUser) {
         kb.row()
+            .text('📤 Bulk SMS', 'BULK_SMS')
+            .text('⏰ Schedule SMS', 'SCHEDULE_SMS')
+            .row()
             .text('➕ Add User', 'ADDUSER')
             .text('⬆️ Promote', 'PROMOTE')
             .row()
@@ -412,6 +462,7 @@ async function executeMenuCommand(ctx, isAdminUser) {
         reply_markup: kb
     });
 }
+
 
 async function executeHealthCommand(ctx) {
     const axios = require('axios');
@@ -615,12 +666,19 @@ async function executeCallsCommand(ctx) {
 bot.api.setMyCommands([
     { command: 'start', description: 'Start or restart the bot' },
     { command: 'call', description: 'Start outbound voice call' },
+    { command: 'sms', description: 'Send SMS message' },
     { command: 'transcript', description: 'Get call transcript by SID' },
     { command: 'calls', description: 'List recent calls' },
+    { command: 'smstemplates', description: 'View SMS templates' },
+    { command: 'smsconversation', description: 'View SMS conversation' },
     { command: 'guide', description: 'Show detailed usage guide' },
     { command: 'help', description: 'Show available commands' },
     { command: 'menu', description: 'Show quick action menu' },
     { command: 'health', description: 'Check bot and API health' },
+    { command: 'bulksms', description: 'Send bulk SMS (admin only)' },
+    { command: 'schedulesms', description: 'Schedule SMS message' },
+    { command: 'smsstats', description: 'SMS statistics (admin only)' },
+    { command: 'smstemplate', description: 'View specific SMS template'},
     { command: 'adduser', description: 'Add user (admin only)' },
     { command: 'promote', description: 'Promote to ADMIN (admin only)' },
     { command: 'removeuser', description: 'Remove a USER (admin only)' },

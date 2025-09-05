@@ -14,16 +14,22 @@ module.exports = (bot) => {
             const isOwner = await new Promise(r => isAdmin(ctx.from.id, r));
             
             const kb = new InlineKeyboard()
-                .text('📞 New Call', 'CALL')
-                .text('📋 Recent Calls', 'CALLS')
-                .row()
-                .text('🏥 Health Check', 'HEALTH')
-                .text('ℹ️ Help', 'HELP')
-                .row()
-                .text('📚 Guide', 'GUIDE');
+        .text('📞 New Call', 'CALL')
+        .text('📱 Send SMS', 'SMS')
+        .row()
+        .text('📋 Recent Calls', 'CALLS')
+        .text('💬 SMS Stats', 'SMS_STATS')
+        .row()
+        .text('🏥 Health Check', 'HEALTH')
+        .text('ℹ️ Help', 'HELP')
+        .row()
+        .text('📚 Guide', 'GUIDE');
 
             if (isOwner) {
                 kb.row()
+                    .text('📤 Bulk SMS', 'BULK_SMS')
+                    .text('⏰ Schedule SMS', 'SCHEDULE_SMS')
+                    .row()
                     .text('➕ Add User', 'ADDUSER')
                     .text('⬆️ Promote', 'PROMOTE')
                     .row()

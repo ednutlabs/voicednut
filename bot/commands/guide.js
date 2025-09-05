@@ -38,6 +38,7 @@ Version: 1.0.0`;
             .text('📞 New Call', 'CALL')
             .text('📋 Commands', 'HELP')
             .row()
+            .text('💬 New Sms', 'SMS')
             .text('🔄 Main Menu', 'MENU');
 
         await ctx.reply(mainGuide, {

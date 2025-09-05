@@ -18,9 +18,11 @@ class EnhancedDatabase {
                 }
                 console.log('Connected to enhanced SQLite database');
                 this.createEnhancedTables().then(() => {
-                    this.isInitialized = true;
-                    console.log('✅ Enhanced database initialization complete'.green);
-                    resolve();
+                    this.initializeSMSTables().then(() => {
+                        this.isInitialized = true;
+                        console.log('✅ Enhanced database initialization complete'.green);
+                        resolve();
+                    }).catch(reject);
                 }).catch(reject);
             });
         });
@@ -872,6 +874,114 @@ class EnhancedDatabase {
                     
                     resolve(summary);
                 }
+            });
+        });
+    }
+
+    // Create SMS messages table
+    async initializeSMSTables() {
+        return new Promise((resolve, reject) => {
+            const createSMSTable = `CREATE TABLE IF NOT EXISTS sms_messages ( id INTEGER PRIMARY KEY AUTOINCREMENT, message_sid TEXT UNIQUE NOT NULL, to_number TEXT, from_number TEXT, body TEXT NOT NULL, status TEXT DEFAULT 'queued', direction TEXT NOT NULL, -- 'inbound' or 'outbound' error_code TEXT, error_message TEXT, ai_response TEXT, response_message_sid TEXT, user_chat_id TEXT, created_at DATETIME DEFAULT CURRENT_TIMESTAMP, updated_at DATETIME DEFAULT CURRENT_TIMESTAMP );`;
+
+            const createBulkSMSTable = `
+              CREATE TABLE IF NOT EXISTS bulk_sms_operations (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                total_recipients INTEGER NOT NULL,
+                successful INTEGER DEFAULT 0,
+                failed INTEGER DEFAULT 0,
+                message TEXT NOT NULL,
+                user_chat_id TEXT,
+                created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+              );
+            `;
+
+            this.db.serialize(() => {
+                this.db.run(createSMSTable);
+                this.db.run(createBulkSMSTable, (err) => {
+                    if (err) reject(err);
+                    else resolve();
+                });
+            });
+        });
+    }
+
+    // Save SMS message
+    async saveSMSMessage(messageData) {
+        return new Promise((resolve, reject) => {
+            const sql = `INSERT INTO sms_messages ( message_sid, to_number, from_number, body, status,  direction, ai_response, response_message_sid, user_chat_id ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`;
+
+            this.db.run(sql, [
+                messageData.message_sid,
+                messageData.to_number || null,
+                messageData.from_number || null,
+                messageData.body,
+                messageData.status || 'queued',
+                messageData.direction,
+                messageData.ai_response || null,
+                messageData.response_message_sid || null,
+                messageData.user_chat_id || null
+            ], function (err) {
+                if (err) reject(err);
+                else resolve(this.lastID);
+            });
+        });
+    }
+
+    // Update SMS status
+    async updateSMSStatus(messageSid, statusData) {
+        return new Promise((resolve, reject) => {
+            const sql = `UPDATE sms_messages  SET status = ?, error_code = ?, error_message = ?, updated_at = CURRENT_TIMESTAMP WHERE message_sid = ?`;
+
+            this.db.run(sql, [
+                statusData.status,
+                statusData.error_code || null,
+                statusData.error_message || null,
+                messageSid
+            ], function (err) {
+                if (err) reject(err);
+                else resolve(this.changes);
+            });
+        });
+    }
+
+    // Log bulk SMS operation
+    async logBulkSMSOperation(operationData) {
+        return new Promise((resolve, reject) => {
+            const sql = `INSERT INTO bulk_sms_operations ( total_recipients, successful, failed, message, user_chat_id ) VALUES (?, ?, ?, ?, ?)`;
+
+            this.db.run(sql, [
+                operationData.total_recipients,
+                operationData.successful,
+                operationData.failed,
+                operationData.message,
+                operationData.user_chat_id || null
+            ], function (err) {
+                if (err) reject(err);
+                else resolve(this.lastID);
+            });
+        });
+    }
+
+    // Get SMS messages
+    async getSMSMessages(limit = 50, offset = 0) {
+        return new Promise((resolve, reject) => {
+            const sql = `SELECT * FROM sms_messages  ORDER BY created_at DESC  LIMIT ? OFFSET ?`;
+
+            this.db.all(sql, [limit, offset], (err, rows) => {
+                if (err) reject(err);
+                else resolve(rows || []);
+            });
+        });
+    }
+
+    // Get SMS conversation
+    async getSMSConversation(phoneNumber, limit = 50) {
+        return new Promise((resolve, reject) => {
+            const sql = `SELECT * FROM sms_messages  WHERE to_number = ? OR from_number = ? ORDER BY created_at ASC  LIMIT ?`;
+
+            this.db.all(sql, [phoneNumber, phoneNumber, limit], (err, rows) => {
+                if (err) reject(err);
+                else resolve(rows || []);
             });
         });
     }
