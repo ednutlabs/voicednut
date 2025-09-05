@@ -1801,56 +1801,6 @@ app.post('/api/sms/schedule', async (req, res) => {
     }
 });
 
-// Get SMS conversation
-app.get('/api/sms/conversation/:phone', async (req, res) => {
-    try {
-        const { phone } = req.params;
-        const conversation = smsService.getConversation(phone);
-
-        if (!conversation) {
-            return res.status(404).json({
-                success: false,
-                error: 'Conversation not found'
-            });
-        }
-
-        res.json({
-            success: true,
-            conversation: {
-                ...conversation,
-                messages: conversation.messages.slice(-50) // Last 50 messages
-            }
-        });
-    } catch (error) {
-        console.error('❌ Get conversation error:', error);
-        res.status(500).json({
-            success: false,
-            error: 'Failed to get conversation'
-        });
-    }
-});
-
-// Get SMS statistics
-app.get('/api/sms/stats', async (req, res) => {
-    try {
-        const stats = smsService.getStatistics();
-        const activeConversations = smsService.getActiveConversations();
-
-        res.json({
-            success: true,
-            statistics: stats,
-            active_conversations: activeConversations.slice(0, 20), // Last 20 conversations
-            sms_service_enabled: true
-        });
-    } catch (error) {
-        console.error('❌ SMS stats error:', error);
-        res.status(500).json({
-            success: false,
-            error: 'Failed to get SMS statistics'
-        });
-    }
-});
-
 // SMS templates endpoint
 app.get('/api/sms/templates', async (req, res) => {
     try {
@@ -1888,6 +1838,825 @@ app.get('/api/sms/templates', async (req, res) => {
         res.status(500).json({
             success: false,
             error: 'Failed to get templates'
+        });
+    }
+});
+
+// Get SMS messages from database for conversation view
+app.get('/api/sms/messages/conversation/:phone', async (req, res) => {
+    try {
+        const { phone } = req.params;
+        const limit = Math.min(parseInt(req.query.limit) || 50, 100);
+
+        if (!phone) {
+            return res.status(400).json({
+                success: false,
+                error: 'Phone number is required'
+            });
+        }
+
+        const messages = await db.getSMSConversation(phone, limit);
+
+        res.json({
+            success: true,
+            phone: phone,
+            messages: messages,
+            message_count: messages.length
+        });
+
+    } catch (error) {
+        console.error('❌ Error fetching SMS conversation from database:', error);
+        res.status(500).json({
+            success: false,
+            error: 'Failed to fetch conversation',
+            details: error.message
+        });
+    }
+});
+
+// Get recent SMS messages from database
+app.get('/api/sms/messages/recent', async (req, res) => {
+    try {
+        const limit = Math.min(parseInt(req.query.limit) || 10, 50);
+        const offset = parseInt(req.query.offset) || 0;
+
+        const messages = await db.getSMSMessages(limit, offset);
+
+        res.json({
+            success: true,
+            messages: messages,
+            count: messages.length,
+            limit: limit,
+            offset: offset
+        });
+
+    } catch (error) {
+        console.error('❌ Error fetching recent SMS messages:', error);
+        res.status(500).json({
+            success: false,
+            error: 'Failed to fetch recent messages',
+            details: error.message
+        });
+    }
+});
+
+// Get SMS database statistics
+app.get('/api/sms/database-stats', async (req, res) => {
+    try {
+        const hours = parseInt(req.query.hours) || 24;
+        const dateFrom = new Date(Date.now() - (hours * 60 * 60 * 1000)).toISOString();
+
+        // Get comprehensive SMS statistics from database
+        const stats = await new Promise((resolve, reject) => {
+            const queries = {
+                // Total messages
+                totalMessages: `SELECT COUNT(*) as count FROM sms_messages`,
+                
+                // Messages by direction
+                messagesByDirection: `
+                    SELECT direction, COUNT(*) as count 
+                    FROM sms_messages 
+                    GROUP BY direction
+                `,
+                
+                // Messages by status
+                messagesByStatus: `
+                    SELECT status, COUNT(*) as count 
+                    FROM sms_messages 
+                    GROUP BY status
+                    ORDER BY count DESC
+                `,
+                
+                // Recent messages
+                recentMessages: `
+                    SELECT * FROM sms_messages 
+                    WHERE created_at >= ?
+                    ORDER BY created_at DESC 
+                    LIMIT 5
+                `,
+                
+                // Bulk operations
+                bulkOperations: `SELECT COUNT(*) as count FROM bulk_sms_operations`,
+                
+                // Recent bulk operations
+                recentBulkOps: `
+                    SELECT * FROM bulk_sms_operations 
+                    WHERE created_at >= ?
+                    ORDER BY created_at DESC 
+                    LIMIT 3
+                `
+            };
+
+            const results = {};
+            let completed = 0;
+            const total = Object.keys(queries).length;
+
+            for (const [key, query] of Object.entries(queries)) {
+                const params = ['recentMessages', 'recentBulkOps'].includes(key) ? [dateFrom] : [];
+                
+                db.db.all(query, params, (err, rows) => {
+                    if (err) {
+                        console.error(`SMS stats query error for ${key}:`, err);
+                        results[key] = key.includes('recent') ? [] : [{ count: 0 }];
+                    } else {
+                        results[key] = rows || [];
+                    }
+                    
+                    completed++;
+                    if (completed === total) {
+                        resolve(results);
+                    }
+                });
+            }
+        });
+
+        // Process the statistics
+        const processedStats = {
+            total_messages: stats.totalMessages[0]?.count || 0,
+            sent_messages: stats.messagesByDirection.find(d => d.direction === 'outbound')?.count || 0,
+            received_messages: stats.messagesByDirection.find(d => d.direction === 'inbound')?.count || 0,
+            delivered_count: stats.messagesByStatus.find(s => s.status === 'delivered')?.count || 0,
+            failed_count: stats.messagesByStatus.find(s => s.status === 'failed')?.count || 0,
+            pending_count: stats.messagesByStatus.find(s => s.status === 'pending')?.count || 0,
+            bulk_operations: stats.bulkOperations[0]?.count || 0,
+            recent_messages: stats.recentMessages || [],
+            recent_bulk_operations: stats.recentBulkOps || [],
+            status_breakdown: stats.messagesByStatus || [],
+            direction_breakdown: stats.messagesByDirection || [],
+            time_period_hours: hours
+        };
+
+        // Calculate success rate
+        const totalSent = processedStats.sent_messages;
+        const delivered = processedStats.delivered_count;
+        processedStats.success_rate = totalSent > 0 ? 
+            Math.round((delivered / totalSent) * 100) : 0;
+
+        res.json({
+            success: true,
+            ...processedStats
+        });
+
+    } catch (error) {
+        console.error('❌ Error fetching SMS database statistics:', error);
+        res.status(500).json({
+            success: false,
+            error: 'Failed to fetch database statistics',
+            details: error.message
+        });
+    }
+});
+
+// Get SMS status by message SID
+app.get('/api/sms/status/:messageSid', async (req, res) => {
+    try {
+        const { messageSid } = req.params;
+
+        const message = await new Promise((resolve, reject) => {
+            db.db.get(
+                `SELECT * FROM sms_messages WHERE message_sid = ?`,
+                [messageSid],
+                (err, row) => {
+                    if (err) {
+                        reject(err);
+                    } else {
+                        resolve(row);
+                    }
+                }
+            );
+        });
+
+        if (!message) {
+            return res.status(404).json({
+                success: false,
+                error: 'Message not found'
+            });
+        }
+
+        res.json({
+            success: true,
+            message: message
+        });
+
+    } catch (error) {
+        console.error('❌ Error fetching SMS status:', error);
+        res.status(500).json({
+            success: false,
+            error: 'Failed to fetch message status',
+            details: error.message
+        });
+    }
+});
+
+// Enhanced SMS templates endpoint with better error handling
+app.get('/api/sms/templates/:templateName?', async (req, res) => {
+    try {
+        const { templateName } = req.params;
+        const { variables } = req.query;
+
+        // Built-in templates (fallback)
+        const builtInTemplates = {
+            welcome: 'Welcome to our service! We\'re excited to have you aboard. Reply HELP for assistance or STOP to unsubscribe.',
+            appointment_reminder: 'Reminder: You have an appointment on {date} at {time}. Reply CONFIRM to confirm or RESCHEDULE to change.',
+            verification: 'Your verification code is: {code}. This code will expire in 10 minutes. Do not share this code with anyone.',
+            order_update: 'Order #{order_id} update: {status}. Track your order at {tracking_url}',
+            payment_reminder: 'Payment reminder: Your payment of {amount} is due on {due_date}. Pay now: {payment_url}',
+            promotional: '🎉 Special offer just for you! {offer_text} Use code {promo_code}. Valid until {expiry_date}. Reply STOP to opt out.',
+            customer_service: 'Thanks for contacting us! We\'ve received your message and will respond within 24 hours. For urgent matters, call {phone}.',
+            survey: 'How was your experience with us? Rate us 1-5 stars by replying with a number. Your feedback helps us improve!'
+        };
+
+        if (templateName) {
+            // Get specific template
+            if (!builtInTemplates[templateName]) {
+                return res.status(404).json({
+                    success: false,
+                    error: `Template '${templateName}' not found`
+                });
+            }
+
+            let template = builtInTemplates[templateName];
+            let parsedVariables = {};
+
+            // Parse and apply variables if provided
+            if (variables) {
+                try {
+                    parsedVariables = JSON.parse(variables);
+                    
+                    // Replace variables in template
+                    for (const [key, value] of Object.entries(parsedVariables)) {
+                        template = template.replace(new RegExp(`{${key}}`, 'g'), value);
+                    }
+                } catch (parseError) {
+                    console.error('Error parsing template variables:', parseError);
+                    // Continue with template without variable substitution
+                }
+            }
+
+            res.json({
+                success: true,
+                template_name: templateName,
+                template: template,
+                original_template: builtInTemplates[templateName],
+                variables: parsedVariables
+            });
+
+        } else {
+            // Get list of available templates
+            res.json({
+                success: true,
+                available_templates: Object.keys(builtInTemplates),
+                template_count: Object.keys(builtInTemplates).length
+            });
+        }
+
+    } catch (error) {
+        console.error('❌ Error handling SMS templates:', error);
+        res.status(500).json({
+            success: false,
+            error: 'Failed to process template request',
+            details: error.message
+        });
+    }
+});
+
+// SMS webhook delivery status notifications (enhanced)
+app.post('/webhook/sms-delivery', async (req, res) => {
+    try {
+        const { MessageSid, MessageStatus, ErrorCode, ErrorMessage, To, From } = req.body;
+
+        console.log(`📱 SMS Delivery Status: ${MessageSid} -> ${MessageStatus}`);
+
+        // Update message status in database
+        if (db) {
+            await db.updateSMSStatus(MessageSid, {
+                status: MessageStatus,
+                error_code: ErrorCode,
+                error_message: ErrorMessage
+            });
+
+            // Get the original message to find user_chat_id for notification
+            const message = await new Promise((resolve, reject) => {
+                db.db.get(
+                    `SELECT * FROM sms_messages WHERE message_sid = ?`,
+                    [MessageSid],
+                    (err, row) => {
+                        if (err) reject(err);
+                        else resolve(row);
+                    }
+                );
+            });
+
+            // Create webhook notification if user_chat_id exists
+            if (message && message.user_chat_id) {
+                const notificationType = MessageStatus === 'delivered' ? 'sms_delivered' :
+                                       MessageStatus === 'failed' ? 'sms_failed' :
+                                       `sms_${MessageStatus}`;
+
+                await db.createEnhancedWebhookNotification(
+                    MessageSid,
+                    notificationType,
+                    message.user_chat_id,
+                    MessageStatus === 'failed' ? 'high' : 'normal'
+                );
+
+                console.log(`📨 Created ${notificationType} notification for user ${message.user_chat_id}`);
+            }
+        }
+
+        res.status(200).send('OK');
+    } catch (error) {
+        console.error('❌ SMS delivery webhook error:', error);
+        res.status(200).send('OK'); // Always return 200 to prevent retries
+    }
+});
+
+// Bulk SMS status endpoint
+app.get('/api/sms/bulk/status', async (req, res) => {
+    try {
+        const limit = Math.min(parseInt(req.query.limit) || 10, 50);
+        const hours = parseInt(req.query.hours) || 24;
+        const dateFrom = new Date(Date.now() - (hours * 60 * 60 * 1000)).toISOString();
+
+        const bulkOperations = await new Promise((resolve, reject) => {
+            db.db.all(`
+                SELECT * FROM bulk_sms_operations 
+                WHERE created_at >= ?
+                ORDER BY created_at DESC 
+                LIMIT ?
+            `, [dateFrom, limit], (err, rows) => {
+                if (err) {
+                    reject(err);
+                } else {
+                    resolve(rows || []);
+                }
+            });
+        });
+
+        // Get summary statistics
+        const summary = bulkOperations.reduce((acc, op) => {
+            acc.totalOperations += 1;
+            acc.totalRecipients += op.total_recipients;
+            acc.totalSuccessful += op.successful;
+            acc.totalFailed += op.failed;
+            return acc;
+        }, {
+            totalOperations: 0,
+            totalRecipients: 0,
+            totalSuccessful: 0,
+            totalFailed: 0
+        });
+
+        summary.successRate = summary.totalRecipients > 0 ? 
+            Math.round((summary.totalSuccessful / summary.totalRecipients) * 100) : 0;
+
+        res.json({
+            success: true,
+            summary: summary,
+            operations: bulkOperations,
+            time_period_hours: hours
+        });
+
+    } catch (error) {
+        console.error('❌ Error fetching bulk SMS status:', error);
+        res.status(500).json({
+            success: false,
+            error: 'Failed to fetch bulk SMS status',
+            details: error.message
+        });
+    }
+});
+
+// SMS analytics dashboard endpoint
+app.get('/api/sms/analytics', async (req, res) => {
+    try {
+        const days = parseInt(req.query.days) || 7;
+        const dateFrom = new Date(Date.now() - (days * 24 * 60 * 60 * 1000)).toISOString();
+
+        const analytics = await new Promise((resolve, reject) => {
+            const queries = {
+                // Daily message volume
+                dailyVolume: `
+                    SELECT 
+                        DATE(created_at) as date,
+                        COUNT(*) as total,
+                        COUNT(CASE WHEN direction = 'outbound' THEN 1 END) as sent,
+                        COUNT(CASE WHEN direction = 'inbound' THEN 1 END) as received,
+                        COUNT(CASE WHEN status = 'delivered' THEN 1 END) as delivered,
+                        COUNT(CASE WHEN status = 'failed' THEN 1 END) as failed
+                    FROM sms_messages 
+                    WHERE created_at >= ?
+                    GROUP BY DATE(created_at) 
+                    ORDER BY date DESC
+                `,
+                
+                // Hourly distribution
+                hourlyDistribution: `
+                    SELECT 
+                        strftime('%H', created_at) as hour,
+                        COUNT(*) as count
+                    FROM sms_messages 
+                    WHERE created_at >= ?
+                    GROUP BY strftime('%H', created_at)
+                    ORDER BY hour
+                `,
+                
+                // Top phone numbers (anonymized)
+                topNumbers: `
+                    SELECT 
+                        SUBSTR(COALESCE(to_number, from_number), 1, 6) || 'XXXX' as phone_prefix,
+                        COUNT(*) as message_count
+                    FROM sms_messages 
+                    WHERE created_at >= ?
+                    GROUP BY SUBSTR(COALESCE(to_number, from_number), 1, 6)
+                    ORDER BY message_count DESC 
+                    LIMIT 10
+                `,
+                
+                // Error analysis
+                errorAnalysis: `
+                    SELECT 
+                        error_code,
+                        error_message,
+                        COUNT(*) as count
+                    FROM sms_messages 
+                    WHERE created_at >= ? AND error_code IS NOT NULL
+                    GROUP BY error_code, error_message
+                    ORDER BY count DESC
+                    LIMIT 10
+                `
+            };
+
+            const results = {};
+            let completed = 0;
+            const total = Object.keys(queries).length;
+
+            for (const [key, query] of Object.entries(queries)) {
+                db.db.all(query, [dateFrom], (err, rows) => {
+                    if (err) {
+                        console.error(`SMS analytics query error for ${key}:`, err);
+                        results[key] = [];
+                    } else {
+                        results[key] = rows || [];
+                    }
+                    
+                    completed++;
+                    if (completed === total) {
+                        resolve(results);
+                    }
+                });
+            }
+        });
+
+        // Calculate summary metrics
+        const summary = {
+            total_messages: 0,
+            total_sent: 0,
+            total_received: 0,
+            total_delivered: 0,
+            total_failed: 0,
+            delivery_rate: 0,
+            error_rate: 0
+        };
+
+        analytics.dailyVolume.forEach(day => {
+            summary.total_messages += day.total;
+            summary.total_sent += day.sent;
+            summary.total_received += day.received;
+            summary.total_delivered += day.delivered;
+            summary.total_failed += day.failed;
+        });
+
+        if (summary.total_sent > 0) {
+            summary.delivery_rate = Math.round((summary.total_delivered / summary.total_sent) * 100);
+            summary.error_rate = Math.round((summary.total_failed / summary.total_sent) * 100);
+        }
+
+        res.json({
+            success: true,
+            period: {
+                days: days,
+                from: dateFrom,
+                to: new Date().toISOString()
+            },
+            summary: summary,
+            daily_volume: analytics.dailyVolume,
+            hourly_distribution: analytics.hourlyDistribution,
+            top_numbers: analytics.topNumbers,
+            error_analysis: analytics.errorAnalysis,
+            enhanced_analytics: true
+        });
+
+    } catch (error) {
+        console.error('❌ Error fetching SMS analytics:', error);
+        res.status(500).json({
+            success: false,
+            error: 'Failed to fetch SMS analytics',
+            details: error.message
+        });
+    }
+});
+
+// SMS search endpoint
+app.get('/api/sms/search', async (req, res) => {
+    try {
+        const query = req.query.q;
+        const limit = Math.min(parseInt(req.query.limit) || 20, 50);
+        const direction = req.query.direction; // 'inbound', 'outbound', or null for all
+        const status = req.query.status; // message status filter
+
+        if (!query || query.length < 2) {
+            return res.status(400).json({
+                success: false,
+                error: 'Search query must be at least 2 characters'
+            });
+        }
+
+        let whereClause = `WHERE (body LIKE ? OR to_number LIKE ? OR from_number LIKE ?)`;
+        let queryParams = [`%${query}%`, `%${query}%`, `%${query}%`];
+
+        if (direction) {
+            whereClause += ` AND direction = ?`;
+            queryParams.push(direction);
+        }
+
+        if (status) {
+            whereClause += ` AND status = ?`;
+            queryParams.push(status);
+        }
+
+        queryParams.push(limit);
+
+        const searchResults = await new Promise((resolve, reject) => {
+            const searchQuery = `
+                SELECT * FROM sms_messages 
+                ${whereClause}
+                ORDER BY created_at DESC
+                LIMIT ?
+            `;
+
+            db.db.all(searchQuery, queryParams, (err, rows) => {
+                if (err) {
+                    console.error('SMS search query error:', err);
+                    reject(err);
+                } else {
+                    resolve(rows || []);
+                }
+            });
+        });
+
+        // Format results for display
+        const formattedResults = searchResults.map(msg => ({
+            message_sid: msg.message_sid,
+            phone: msg.to_number || msg.from_number,
+            direction: msg.direction,
+            status: msg.status,
+            body: msg.body,
+            created_at: msg.created_at,
+            created_date: new Date(msg.created_at).toLocaleDateString(),
+            created_time: new Date(msg.created_at).toLocaleTimeString(),
+            // Highlight matching text (basic implementation)
+            highlighted_body: msg.body.replace(
+                new RegExp(query, 'gi'), 
+                `**${query}**`
+            ),
+            error_info: msg.error_code ? {
+                code: msg.error_code,
+                message: msg.error_message
+            } : null
+        }));
+
+        res.json({
+            success: true,
+            query: query,
+            filters: { direction, status },
+            results: formattedResults,
+            result_count: formattedResults.length,
+            enhanced_search: true
+        });
+
+    } catch (error) {
+        console.error('❌ Error in SMS search:', error);
+        res.status(500).json({
+            success: false,
+            error: 'Search failed',
+            details: error.message
+        });
+    }
+});
+
+// Export SMS data endpoint
+app.get('/api/sms/export', async (req, res) => {
+    try {
+        const format = req.query.format || 'json'; // 'json' or 'csv'
+        const days = parseInt(req.query.days) || 30;
+        const dateFrom = new Date(Date.now() - (days * 24 * 60 * 60 * 1000)).toISOString();
+
+        const messages = await new Promise((resolve, reject) => {
+            db.db.all(`
+                SELECT 
+                    message_sid,
+                    to_number,
+                    from_number,
+                    body,
+                    status,
+                    direction,
+                    created_at,
+                    updated_at,
+                    error_code,
+                    error_message,
+                    ai_response
+                FROM sms_messages 
+                WHERE created_at >= ?
+                ORDER BY created_at DESC
+            `, [dateFrom], (err, rows) => {
+                if (err) {
+                    reject(err);
+                } else {
+                    resolve(rows || []);
+                }
+            });
+        });
+
+        if (format === 'csv') {
+            // Generate CSV
+            const csvHeaders = [
+                'Message SID', 'To Number', 'From Number', 'Message Body', 
+                'Status', 'Direction', 'Created At', 'Updated At', 
+                'Error Code', 'Error Message', 'AI Response'
+            ];
+
+            let csvContent = csvHeaders.join(',') + '\n';
+            
+            messages.forEach(msg => {
+                const row = [
+                    msg.message_sid || '',
+                    msg.to_number || '',
+                    msg.from_number || '',
+                    `"${(msg.body || '').replace(/"/g, '""')}"`, // Escape quotes
+                    msg.status || '',
+                    msg.direction || '',
+                    msg.created_at || '',
+                    msg.updated_at || '',
+                    msg.error_code || '',
+                    `"${(msg.error_message || '').replace(/"/g, '""')}"`,
+                    `"${(msg.ai_response || '').replace(/"/g, '""')}"`
+                ];
+                csvContent += row.join(',') + '\n';
+            });
+
+            res.setHeader('Content-Type', 'text/csv');
+            res.setHeader('Content-Disposition', `attachment; filename="sms-export-${new Date().toISOString().split('T')[0]}.csv"`);
+            res.send(csvContent);
+
+        } else {
+            // Return JSON
+            res.json({
+                success: true,
+                export_info: {
+                    total_messages: messages.length,
+                    date_range: {
+                        from: dateFrom,
+                        to: new Date().toISOString()
+                    },
+                    exported_at: new Date().toISOString()
+                },
+                messages: messages
+            });
+        }
+
+    } catch (error) {
+        console.error('❌ Error exporting SMS data:', error);
+        res.status(500).json({
+            success: false,
+            error: 'Failed to export SMS data',
+            details: error.message
+        });
+    }
+});
+
+// SMS system health check
+app.get('/api/sms/health', async (req, res) => {
+    try {
+        const health = {
+            timestamp: new Date().toISOString(),
+            status: 'healthy',
+            services: {
+                database: { status: 'unknown' },
+                twilio: { status: 'unknown' },
+                sms_service: { status: 'unknown' }
+            },
+            statistics: {
+                active_conversations: 0,
+                scheduled_messages: 0,
+                recent_messages: 0
+            }
+        };
+
+        // Check database connectivity
+        try {
+            const dbTest = await new Promise((resolve, reject) => {
+                db.db.get('SELECT COUNT(*) as count FROM sms_messages LIMIT 1', (err, row) => {
+                    if (err) reject(err);
+                    else resolve(row);
+                });
+            });
+            
+            health.services.database.status = 'healthy';
+            health.services.database.message_count = dbTest.count;
+        } catch (dbError) {
+            health.services.database.status = 'unhealthy';
+            health.services.database.error = dbError.message;
+            health.status = 'degraded';
+        }
+
+        // Check SMS service if available
+        try {
+            if (smsService) {
+                const stats = smsService.getStatistics();
+                health.services.sms_service.status = 'healthy';
+                health.statistics.active_conversations = stats.active_conversations;
+                health.statistics.scheduled_messages = stats.scheduled_messages;
+            } else {
+                health.services.sms_service.status = 'not_initialized';
+            }
+        } catch (smsError) {
+            health.services.sms_service.status = 'unhealthy';
+            health.services.sms_service.error = smsError.message;
+        }
+
+        // Check recent activity
+        try {
+            const recentCount = await new Promise((resolve, reject) => {
+                const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000).toISOString();
+                db.db.get(
+                    'SELECT COUNT(*) as count FROM sms_messages WHERE created_at >= ?',
+                    [oneHourAgo],
+                    (err, row) => {
+                        if (err) reject(err);
+                        else resolve(row.count || 0);
+                    }
+                );
+            });
+            
+            health.statistics.recent_messages = recentCount;
+        } catch (recentError) {
+            console.warn('Could not get recent message count:', recentError);
+        }
+
+        // Check Twilio connectivity (basic check)
+        try {
+            if (process.env.TWILIO_ACCOUNT_SID && process.env.TWILIO_AUTH_TOKEN) {
+                health.services.twilio.status = 'configured';
+                health.services.twilio.account_sid = process.env.TWILIO_ACCOUNT_SID.substring(0, 8) + '...';
+            } else {
+                health.services.twilio.status = 'not_configured';
+                health.status = 'degraded';
+            }
+        } catch (twilioError) {
+            health.services.twilio.status = 'error';
+            health.services.twilio.error = twilioError.message;
+        }
+
+        res.json(health);
+
+    } catch (error) {
+        console.error('❌ SMS health check error:', error);
+        res.status(500).json({
+            timestamp: new Date().toISOString(),
+            status: 'unhealthy',
+            error: 'Health check failed',
+            details: error.message
+        });
+    }
+});
+
+// Clean up old SMS conversations (manual trigger)
+app.post('/api/sms/cleanup-conversations', async (req, res) => {
+    try {
+        if (!smsService) {
+            return res.status(500).json({
+                success: false,
+                error: 'SMS service not initialized'
+            });
+        }
+
+        const maxAgeHours = parseInt(req.body.max_age_hours) || 24;
+        const cleaned = smsService.cleanupOldConversations(maxAgeHours);
+
+        res.json({
+            success: true,
+            cleaned_count: cleaned,
+            max_age_hours: maxAgeHours,
+            timestamp: new Date().toISOString()
+        });
+
+    } catch (error) {
+        console.error('❌ Error cleaning up SMS conversations:', error);
+        res.status(500).json({
+            success: false,
+            error: 'Failed to cleanup conversations',
+            details: error.message
         });
     }
 });
