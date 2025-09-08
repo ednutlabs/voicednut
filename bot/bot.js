@@ -106,7 +106,7 @@ bot.command('start', async (ctx) => {
 
         // Prepare keyboard
         const kb = new InlineKeyboard()
-            .webApp('🚀 Open Mini App', config.webAppUrl) // Add Mini App button first
+            .text('🚀 Open Mini App', config.webAppUrl) // Add Mini App button first
             .row()
             .text('📞 New Call', 'CALL')
             .text('📚 Guide', 'GUIDE')
