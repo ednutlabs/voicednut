@@ -45,7 +45,6 @@ const { addUserFlow, registerAddUserCommand } = require('./commands/adduser');
 const { promoteFlow, registerPromoteCommand } = require('./commands/promote');
 const { removeUserFlow, registerRemoveUserCommand } = require('./commands/removeuser');
 const { smsFlow, bulkSmsFlow, scheduleSmsFlow, registerSmsCommands } = require('./commands/sms');
-const { registerWebAppCommands } = require('./commands/webapp');
 
 // Register conversations with error handling
 bot.use(wrapConversation(callFlow, "call-conversation"));
@@ -104,9 +103,10 @@ bot.command('start', async (ctx) => {
             '🛡️ *Welcome, Administrator!*\n\nYou have full access to all bot features.' :
             '👋 *Welcome to Voicednut Bot!*\n\nYou can make voice calls using AI agents.';
 
+        const webAppUrl = `${config.webAppUrl}`
         // Prepare keyboard
         const kb = new InlineKeyboard()
-            .text('🚀 Open Mini App', config.webAppUrl) // Add Mini App button first
+            .webApp('🚀 Open Mini App', webAppUrl) // Add Mini App button first
             .row()
             .text('📞 New Call', 'CALL')
             .text('📚 Guide', 'GUIDE')
