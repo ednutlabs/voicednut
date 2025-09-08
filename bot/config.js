@@ -29,7 +29,7 @@ module.exports = {
   botToken: process.env.BOT_TOKEN,
 
   // New Mini App configuration
-  webAppUrl: process.env.WEB_APP_URL || 'http://127.0.0.1/miniapp.html',
+  webAppUrl: process.env.WEB_APP_URL || 'http://your-domain.com/miniapp.html',
   webAppSecret: process.env.WEB_APP_SECRET || 'your-web-app-secret',
   webAppPort: process.env.WEB_APP_PORT || 8080,
 
