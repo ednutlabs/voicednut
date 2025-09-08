@@ -27,4 +27,17 @@ module.exports = {
   },
   apiUrl: process.env.API_BASE,
   botToken: process.env.BOT_TOKEN
+},{
+  // New Mini App configuration
+  webAppUrl: process.env.WEB_APP_URL || 'http://127.0.0.1/miniapp.html',
+  webAppSecret: process.env.WEB_APP_SECRET || 'your-web-app-secret',
+  webAppPort: process.env.WEB_APP_PORT || 8080,
+
+  // CORS settings for Mini App
+  cors: {
+    origins: [
+      'https://web.telegram.org',
+      process.env.WEB_APP_URL || 'http://127.0.0.1:8080'
+    ]
+  }
 };

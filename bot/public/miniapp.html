@@ -1,0 +1,880 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Voice Call Bot</title>
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: var(--tg-theme-bg-color, #ffffff);
+            color: var(--tg-theme-text-color, #000000);
+            overflow-x: hidden;
+            padding: 0;
+            margin: 0;
+        }
+
+        .app-container {
+            max-width: 100vw;
+            min-height: 100vh;
+            background: linear-gradient(135deg, 
+                var(--tg-theme-bg-color, #f8fafc) 0%, 
+                var(--tg-theme-secondary-bg-color, #e2e8f0) 100%);
+        }
+
+        .header {
+            background: var(--tg-theme-button-color, #0088cc);
+            color: var(--tg-theme-button-text-color, #ffffff);
+            padding: 16px 20px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .header::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: linear-gradient(45deg, rgba(255,255,255,0.1) 0%, transparent 100%);
+            pointer-events: none;
+        }
+
+        .header-content {
+            position: relative;
+            z-index: 1;
+        }
+
+        .header h1 {
+            font-size: 24px;
+            font-weight: 700;
+            margin-bottom: 4px;
+            text-shadow: 0 1px 3px rgba(0,0,0,0.2);
+        }
+
+        .header .subtitle {
+            opacity: 0.9;
+            font-size: 14px;
+            font-weight: 400;
+        }
+
+        .user-info {
+            background: rgba(255,255,255,0.1);
+            padding: 12px 16px;
+            margin: 16px 20px;
+            border-radius: 12px;
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255,255,255,0.2);
+        }
+
+        .user-info .user-details {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .user-avatar {
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            background: var(--tg-theme-button-color, #0088cc);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+            font-size: 16px;
+            color: white;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+        }
+
+        .user-text {
+            flex: 1;
+        }
+
+        .user-text h3 {
+            font-size: 16px;
+            font-weight: 600;
+            margin-bottom: 2px;
+        }
+
+        .user-text p {
+            font-size: 13px;
+            opacity: 0.8;
+        }
+
+        .main-content {
+            padding: 20px;
+            padding-bottom: 100px;
+        }
+
+        .quick-actions {
+            margin-bottom: 30px;
+        }
+
+        .section-title {
+            font-size: 18px;
+            font-weight: 600;
+            margin-bottom: 16px;
+            color: var(--tg-theme-text-color, #000000);
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .actions-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+            gap: 12px;
+        }
+
+        .action-card {
+            background: var(--tg-theme-button-color, #0088cc);
+            color: var(--tg-theme-button-text-color, #ffffff);
+            padding: 20px 16px;
+            border-radius: 16px;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            border: none;
+            position: relative;
+            overflow: hidden;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+        }
+
+        .action-card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: linear-gradient(135deg, rgba(255,255,255,0.2) 0%, transparent 100%);
+            opacity: 0;
+            transition: opacity 0.3s ease;
+        }
+
+        .action-card:hover::before {
+            opacity: 1;
+        }
+
+        .action-card:active {
+            transform: scale(0.98);
+        }
+
+        .action-card .icon {
+            font-size: 32px;
+            margin-bottom: 8px;
+            display: block;
+            filter: drop-shadow(0 2px 4px rgba(0,0,0,0.2));
+        }
+
+        .action-card .title {
+            font-size: 14px;
+            font-weight: 600;
+            margin-bottom: 4px;
+        }
+
+        .action-card .description {
+            font-size: 12px;
+            opacity: 0.9;
+            line-height: 1.3;
+        }
+
+        .secondary-card {
+            background: var(--tg-theme-secondary-bg-color, #f1f5f9);
+            color: var(--tg-theme-text-color, #000000);
+            box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+        }
+
+        .secondary-card::before {
+            background: linear-gradient(135deg, rgba(0,0,0,0.05) 0%, transparent 100%);
+        }
+
+        .recent-activity {
+            margin-bottom: 30px;
+        }
+
+        .activity-list {
+            background: var(--tg-theme-bg-color, #ffffff);
+            border-radius: 16px;
+            box-shadow: 0 2px 12px rgba(0,0,0,0.08);
+            overflow: hidden;
+        }
+
+        .activity-item {
+            padding: 16px 20px;
+            border-bottom: 1px solid var(--tg-theme-hint-color, #e2e8f0);
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            transition: background-color 0.2s ease;
+        }
+
+        .activity-item:hover {
+            background: var(--tg-theme-secondary-bg-color, #f8fafc);
+        }
+
+        .activity-item:last-child {
+            border-bottom: none;
+        }
+
+        .activity-icon {
+            width: 36px;
+            height: 36px;
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 16px;
+            flex-shrink: 0;
+        }
+
+        .activity-icon.call {
+            background: #10b981;
+            color: white;
+        }
+
+        .activity-icon.sms {
+            background: #8b5cf6;
+            color: white;
+        }
+
+        .activity-content {
+            flex: 1;
+        }
+
+        .activity-title {
+            font-size: 14px;
+            font-weight: 600;
+            margin-bottom: 2px;
+        }
+
+        .activity-subtitle {
+            font-size: 13px;
+            color: var(--tg-theme-hint-color, #64748b);
+        }
+
+        .activity-time {
+            font-size: 12px;
+            color: var(--tg-theme-hint-color, #94a3b8);
+            text-align: right;
+        }
+
+        .bottom-sheet {
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            background: var(--tg-theme-bg-color, #ffffff);
+            border-radius: 20px 20px 0 0;
+            box-shadow: 0 -4px 20px rgba(0,0,0,0.15);
+            padding: 20px;
+            transform: translateY(100%);
+            transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            z-index: 1000;
+            max-height: 80vh;
+            overflow-y: auto;
+        }
+
+        .bottom-sheet.open {
+            transform: translateY(0);
+        }
+
+        .bottom-sheet-handle {
+            width: 40px;
+            height: 4px;
+            background: var(--tg-theme-hint-color, #cbd5e1);
+            border-radius: 2px;
+            margin: 0 auto 20px;
+            cursor: pointer;
+        }
+
+        .form-group {
+            margin-bottom: 20px;
+        }
+
+        .form-label {
+            display: block;
+            font-size: 14px;
+            font-weight: 600;
+            margin-bottom: 8px;
+            color: var(--tg-theme-text-color, #000000);
+        }
+
+        .form-input {
+            width: 100%;
+            padding: 12px 16px;
+            border: 2px solid var(--tg-theme-hint-color, #e2e8f0);
+            border-radius: 12px;
+            font-size: 16px;
+            background: var(--tg-theme-bg-color, #ffffff);
+            color: var(--tg-theme-text-color, #000000);
+            transition: border-color 0.2s ease;
+        }
+
+        .form-input:focus {
+            outline: none;
+            border-color: var(--tg-theme-button-color, #0088cc);
+            box-shadow: 0 0 0 3px rgba(0, 136, 204, 0.1);
+        }
+
+        .form-textarea {
+            min-height: 80px;
+            resize: vertical;
+            font-family: inherit;
+        }
+
+        .btn {
+            background: var(--tg-theme-button-color, #0088cc);
+            color: var(--tg-theme-button-text-color, #ffffff);
+            border: none;
+            padding: 16px 24px;
+            border-radius: 12px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            width: 100%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+        }
+
+        .btn:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 6px 16px rgba(0, 136, 204, 0.3);
+        }
+
+        .btn:active {
+            transform: translateY(0);
+        }
+
+        .btn.secondary {
+            background: var(--tg-theme-secondary-bg-color, #f1f5f9);
+            color: var(--tg-theme-text-color, #000000);
+        }
+
+        .loading {
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            border: 2px solid rgba(255,255,255,0.3);
+            border-radius: 50%;
+            border-top-color: currentColor;
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        .status-indicator {
+            display: inline-block;
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            margin-right: 8px;
+        }
+
+        .status-online { background: #10b981; }
+        .status-busy { background: #f59e0b; }
+        .status-offline { background: #ef4444; }
+
+        .notification {
+            position: fixed;
+            top: 20px;
+            left: 20px;
+            right: 20px;
+            background: var(--tg-theme-button-color, #0088cc);
+            color: var(--tg-theme-button-text-color, #ffffff);
+            padding: 16px;
+            border-radius: 12px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+            transform: translateY(-100px);
+            transition: transform 0.3s ease;
+            z-index: 2000;
+        }
+
+        .notification.show {
+            transform: translateY(0);
+        }
+
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 12px;
+            margin-bottom: 24px;
+        }
+
+        .stat-card {
+            background: var(--tg-theme-bg-color, #ffffff);
+            padding: 16px;
+            border-radius: 12px;
+            text-align: center;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+        }
+
+        .stat-value {
+            font-size: 24px;
+            font-weight: 700;
+            color: var(--tg-theme-button-color, #0088cc);
+            margin-bottom: 4px;
+        }
+
+        .stat-label {
+            font-size: 12px;
+            color: var(--tg-theme-hint-color, #64748b);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        @media (max-width: 480px) {
+            .actions-grid {
+                grid-template-columns: 1fr 1fr;
+            }
+            
+            .stats-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="app-container">
+        <!-- Header -->
+        <div class="header">
+            <div class="header-content">
+                <h1>🎙️ Voice Call Bot</h1>
+                <div class="subtitle">AI-Powered Communication Platform</div>
+            </div>
+        </div>
+
+        <!-- User Info -->
+        <div class="user-info">
+            <div class="user-details">
+                <div class="user-avatar" id="userAvatar">👤</div>
+                <div class="user-text">
+                    <h3 id="userName">Loading...</h3>
+                    <p id="userRole">Checking authorization...</p>
+                </div>
+                <div class="status-indicator status-online"></div>
+            </div>
+        </div>
+
+        <!-- Main Content -->
+        <div class="main-content">
+            <!-- Quick Actions -->
+            <div class="quick-actions">
+                <div class="section-title">
+                    🚀 Quick Actions
+                </div>
+                <div class="actions-grid">
+                    <button class="action-card" onclick="openCallSheet()">
+                        <span class="icon">📞</span>
+                        <div class="title">Voice Call</div>
+                        <div class="description">Start AI voice call</div>
+                    </button>
+                    <button class="action-card" onclick="openSmsSheet()">
+                        <span class="icon">💬</span>
+                        <div class="title">Send SMS</div>
+                        <div class="description">Send text message</div>
+                    </button>
+                    <button class="action-card secondary-card" onclick="showHealth()">
+                        <span class="icon">🏥</span>
+                        <div class="title">Health Check</div>
+                        <div class="description">System status</div>
+                    </button>
+                    <button class="action-card secondary-card" onclick="showGuide()">
+                        <span class="icon">📚</span>
+                        <div class="title">Guide</div>
+                        <div class="description">Usage instructions</div>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Stats Overview -->
+            <div class="section-title">📊 Overview</div>
+            <div class="stats-grid">
+                <div class="stat-card">
+                    <div class="stat-value" id="totalCalls">0</div>
+                    <div class="stat-label">Total Calls</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-value" id="totalSms">0</div>
+                    <div class="stat-label">Messages Sent</div>
+                </div>
+            </div>
+
+            <!-- Recent Activity -->
+            <div class="recent-activity">
+                <div class="section-title">
+                    📋 Recent Activity
+                </div>
+                <div class="activity-list" id="activityList">
+                    <div class="activity-item">
+                        <div class="activity-icon call">📞</div>
+                        <div class="activity-content">
+                            <div class="activity-title">Voice Call to +1234567890</div>
+                            <div class="activity-subtitle">Duration: 2:34 • Completed</div>
+                        </div>
+                        <div class="activity-time">2h ago</div>
+                    </div>
+                    <div class="activity-item">
+                        <div class="activity-icon sms">💬</div>
+                        <div class="activity-content">
+                            <div class="activity-title">SMS to +1234567890</div>
+                            <div class="activity-subtitle">Message delivered successfully</div>
+                        </div>
+                        <div class="activity-time">4h ago</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Admin Actions -->
+            <div id="adminActions" style="display: none;">
+                <div class="section-title">🛡️ Admin Tools</div>
+                <div class="actions-grid">
+                    <button class="action-card" onclick="showUsers()">
+                        <span class="icon">👥</span>
+                        <div class="title">Manage Users</div>
+                        <div class="description">Add/remove users</div>
+                    </button>
+                    <button class="action-card" onclick="showStats()">
+                        <span class="icon">📈</span>
+                        <div class="title">Analytics</div>
+                        <div class="description">Detailed statistics</div>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Call Bottom Sheet -->
+    <div class="bottom-sheet" id="callSheet">
+        <div class="bottom-sheet-handle" onclick="closeSheet('callSheet')"></div>
+        <div class="section-title">📞 New Voice Call</div>
+        
+        <form id="callForm">
+            <div class="form-group">
+                <label class="form-label">Phone Number</label>
+                <input type="tel" class="form-input" id="callPhone" placeholder="+1234567890" required>
+                <small style="color: var(--tg-theme-hint-color, #64748b); font-size: 12px; display: block; margin-top: 4px;">
+                    Use E.164 format (e.g., +1234567890)
+                </small>
+            </div>
+            
+            <div class="form-group">
+                <label class="form-label">Agent Prompt</label>
+                <textarea class="form-input form-textarea" id="callPrompt" 
+                    placeholder="Describe how the AI should behave (e.g., You are a friendly customer service representative...)" required></textarea>
+            </div>
+            
+            <div class="form-group">
+                <label class="form-label">First Message</label>
+                <textarea class="form-input form-textarea" id="callMessage" 
+                    placeholder="The first message the AI will speak (e.g., Hello, this is John calling from ABC Company...)" required></textarea>
+            </div>
+            
+            <button type="submit" class="btn">
+                <span id="callButtonText">📞 Start Call</span>
+                <span id="callLoader" class="loading" style="display: none;"></span>
+            </button>
+        </form>
+    </div>
+
+    <!-- SMS Bottom Sheet -->
+    <div class="bottom-sheet" id="smsSheet">
+        <div class="bottom-sheet-handle" onclick="closeSheet('smsSheet')"></div>
+        <div class="section-title">💬 Send SMS</div>
+        
+        <form id="smsForm">
+            <div class="form-group">
+                <label class="form-label">Phone Number</label>
+                <input type="tel" class="form-input" id="smsPhone" placeholder="+1234567890" required>
+            </div>
+            
+            <div class="form-group">
+                <label class="form-label">Message</label>
+                <textarea class="form-input form-textarea" id="smsMessage" 
+                    placeholder="Enter your message here..." required maxlength="1600"></textarea>
+                <small style="color: var(--tg-theme-hint-color, #64748b); font-size: 12px; display: block; margin-top: 4px; text-align: right;">
+                    <span id="smsCount">0</span>/1600 characters
+                </small>
+            </div>
+            
+            <button type="submit" class="btn">
+                <span id="smsButtonText">💬 Send SMS</span>
+                <span id="smsLoader" class="loading" style="display: none;"></span>
+            </button>
+        </form>
+    </div>
+
+    <!-- Notification -->
+    <div class="notification" id="notification"></div>
+
+    <script>
+        // Initialize Telegram Web App
+        const tg = window.Telegram.WebApp;
+        tg.ready();
+        tg.expand();
+
+        // User data
+        let userData = {
+            id: tg.initDataUnsafe?.user?.id || 'demo',
+            username: tg.initDataUnsafe?.user?.username || 'demo_user',
+            first_name: tg.initDataUnsafe?.user?.first_name || 'Demo',
+            last_name: tg.initDataUnsafe?.user?.last_name || 'User',
+            role: 'USER'
+        };
+
+        // Initialize app
+        function initApp() {
+            updateUserInfo();
+            loadRecentActivity();
+            setupFormHandlers();
+            setupMessageCounter();
+            
+            // Set main button if available
+            if (tg.MainButton) {
+                tg.MainButton.text = "Close App";
+                tg.MainButton.onClick(() => tg.close());
+                tg.MainButton.hide();
+            }
+        }
+
+        function updateUserInfo() {
+            const avatar = document.getElementById('userAvatar');
+            const name = document.getElementById('userName');
+            const role = document.getElementById('userRole');
+
+            avatar.textContent = userData.first_name ? userData.first_name.charAt(0).toUpperCase() : '👤';
+            name.textContent = `${userData.first_name} ${userData.last_name || ''}`.trim();
+            role.textContent = userData.role === 'ADMIN' ? '🛡️ Administrator' : '👤 User';
+
+            // Show admin actions if user is admin
+            if (userData.role === 'ADMIN') {
+                document.getElementById('adminActions').style.display = 'block';
+            }
+        }
+
+        function loadRecentActivity() {
+            // Simulate loading recent activity
+            // In a real implementation, this would fetch from your API
+            setTimeout(() => {
+                document.getElementById('totalCalls').textContent = '12';
+                document.getElementById('totalSms').textContent = '34';
+            }, 1000);
+        }
+
+        // Bottom sheet functions
+        function openCallSheet() {
+            document.getElementById('callSheet').classList.add('open');
+            tg.MainButton.show();
+        }
+
+        function openSmsSheet() {
+            document.getElementById('smsSheet').classList.add('open');
+            tg.MainButton.show();
+        }
+
+        function closeSheet(sheetId) {
+            document.getElementById(sheetId).classList.remove('open');
+            tg.MainButton.hide();
+        }
+
+        // Form handlers
+        function setupFormHandlers() {
+            // Call form
+            document.getElementById('callForm').addEventListener('submit', async (e) => {
+                e.preventDefault();
+                
+                const phone = document.getElementById('callPhone').value;
+                const prompt = document.getElementById('callPrompt').value;
+                const message = document.getElementById('callMessage').value;
+
+                if (!phone || !prompt || !message) {
+                    showNotification('❌ Please fill in all fields', 'error');
+                    return;
+                }
+
+                // Validate phone format
+                if (!phone.match(/^\+[1-9]\d{1,14}$/)) {
+                    showNotification('❌ Invalid phone format. Use E.164 format (+1234567890)', 'error');
+                    return;
+                }
+
+                setLoading('call', true);
+
+                try {
+                    // Send data to bot via Telegram API
+                    const callData = {
+                        action: 'call',
+                        phone: phone,
+                        prompt: prompt,
+                        first_message: message,
+                        user_id: userData.id
+                    };
+
+                    // In a real implementation, you would send this to your bot's webhook
+                    // For now, we simulate success
+                    await simulateApiCall(callData);
+                    
+                    showNotification('✅ Call initiated successfully!', 'success');
+                    closeSheet('callSheet');
+                    
+                    // Reset form
+                    document.getElementById('callForm').reset();
+                    
+                } catch (error) {
+                    showNotification('❌ Failed to initiate call: ' + error.message, 'error');
+                } finally {
+                    setLoading('call', false);
+                }
+            });
+
+            // SMS form
+            document.getElementById('smsForm').addEventListener('submit', async (e) => {
+                e.preventDefault();
+                
+                const phone = document.getElementById('smsPhone').value;
+                const message = document.getElementById('smsMessage').value;
+
+                if (!phone || !message) {
+                    showNotification('❌ Please fill in all fields', 'error');
+                    return;
+                }
+
+                setLoading('sms', true);
+
+                try {
+                    const smsData = {
+                        action: 'sms',
+                        phone: phone,
+                        message: message,
+                        user_id: userData.id
+                    };
+
+                    await simulateApiCall(smsData);
+                    
+                    showNotification('✅ SMS sent successfully!', 'success');
+                    closeSheet('smsSheet');
+                    
+                    // Reset form
+                    document.getElementById('smsForm').reset();
+                    updateSmsCount();
+                    
+                } catch (error) {
+                    showNotification('❌ Failed to send SMS: ' + error.message, 'error');
+                } finally {
+                    setLoading('sms', false);
+                }
+            });
+        }
+
+        function setupMessageCounter() {
+            const textarea = document.getElementById('smsMessage');
+            const counter = document.getElementById('smsCount');
+            
+            textarea.addEventListener('input', updateSmsCount);
+            
+            function updateSmsCount() {
+                counter.textContent = textarea.value.length;
+            }
+            
+            // Make updateSmsCount globally available
+            window.updateSmsCount = updateSmsCount;
+        }
+
+        function setLoading(type, loading) {
+            const buttonText = document.getElementById(type + 'ButtonText');
+            const loader = document.getElementById(type + 'Loader');
+            const form = document.getElementById(type + 'Form');
+            
+            if (loading) {
+                buttonText.style.display = 'none';
+                loader.style.display = 'inline-block';
+                form.querySelector('button').disabled = true;
+            } else {
+                buttonText.style.display = 'inline';
+                loader.style.display = 'none';
+                form.querySelector('button').disabled = false;
+            }
+        }
+
+        function showNotification(message, type = 'info') {
+            const notification = document.getElementById('notification');
+            notification.textContent = message;
+            notification.classList.add('show');
+            
+            // Auto-hide after 3 seconds
+            setTimeout(() => {
+                notification.classList.remove('show');
+            }, 3000);
+        }
+
+        // Simulate API calls
+        async function simulateApiCall(data) {
+            return new Promise((resolve, reject) => {
+                setTimeout(() => {
+                    // Simulate success/failure
+                    if (Math.random() > 0.1) {
+                        resolve({ success: true });
+                    } else {
+                        reject(new Error('Network error'));
+                    }
+                }, 2000);
+            });
+        }
+
+        // Additional functions
+        function showHealth() {
+            showNotification('🏥 System is healthy and running normally', 'success');
+        }
+
+        function showGuide() {
+            showNotification('📚 Guide: Use the forms above to make calls or send SMS messages', 'info');
+        }
+
+        function showUsers() {
+            if (userData.role === 'ADMIN') {
+                showNotification('👥 User management features would open here', 'info');
+            }
+        }
+
+        function showStats() {
+            if (userData.role === 'ADMIN') {
+                showNotification('📈 Analytics dashboard would open here', 'info');
+            }
+        }
+
+        // Handle back button
+        tg.onEvent('backButtonClicked', () => {
+            const openSheet = document.querySelector('.bottom-sheet.open');
+            if (openSheet) {
+                openSheet.classList.remove('open');
+                tg.MainButton.hide();
+            } else {
+                tg.close();
+            }
+        });
+
+        // Initialize when page loads
+        document.addEventListener('DOMContentLoaded', initApp);
+
+        // Handle viewport changes
+        tg.onEvent('viewportChanged', () => {
+            // Adjust layout if needed
+        });
+    </script>
+</body>
+</html>

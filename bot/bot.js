@@ -45,7 +45,7 @@ const { addUserFlow, registerAddUserCommand } = require('./commands/adduser');
 const { promoteFlow, registerPromoteCommand } = require('./commands/promote');
 const { removeUserFlow, registerRemoveUserCommand } = require('./commands/removeuser');
 const { smsFlow, bulkSmsFlow, scheduleSmsFlow, registerSmsCommands } = require('./commands/sms');
-
+const { registerWebAppCommands } = require('./commands/webapp');
 
 // Register conversations with error handling
 bot.use(wrapConversation(callFlow, "call-conversation"));
@@ -71,6 +71,7 @@ require('./commands/menu')(bot);
 require('./commands/guide')(bot);
 require('./commands/transcript')(bot);
 require('./commands/api')(bot);
+require('./commands/webapp')(bot);
 
 // Start command handler
 bot.command('start', async (ctx) => {
@@ -105,6 +106,8 @@ bot.command('start', async (ctx) => {
 
         // Prepare keyboard
         const kb = new InlineKeyboard()
+            .webApp('🚀 Open Mini App', config.webAppUrl) // Add Mini App button first
+            .row()
             .text('📞 New Call', 'CALL')
             .text('📚 Guide', 'GUIDE')
             .row()
@@ -124,6 +127,7 @@ bot.command('start', async (ctx) => {
         }
 
         await ctx.reply(`${welcomeText}\n\n${userStats}\n\n` +
+            '🚀 *Try the new Mini App for a better experience!*\n\n' +
             'Use the buttons below or type /help for available commands.', {
             parse_mode: 'Markdown',
             reply_markup: kb
