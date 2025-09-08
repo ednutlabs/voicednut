@@ -106,8 +106,8 @@ bot.command('start', async (ctx) => {
         const webAppUrl = `${config.webAppUrl}`
         // Prepare keyboard
         const kb = new InlineKeyboard()
-            .text('🚀 Open Mini App', webAppUrl) // Add Mini App button first
-            .row()
+       //     .text('🚀 Open Mini App', webAppUrl) // Add Mini App button first
+         //   .row()
             .text('📞 New Call', 'CALL')
             .text('📚 Guide', 'GUIDE')
             .row()
@@ -274,6 +274,7 @@ async function executeHelpCommand(ctx) {
         let helpText = `📱 <b>Basic Commands</b>
 • /start - Restart bot &amp; show main menu
 • /call - Start a new voice call
+• /app - Open the Mini App
 • /sms - Send an SMS message
 • /smsconversation &lt;phone&gt; - View SMS conversation
 • /transcript &lt;call_sid&gt; - Get call transcript

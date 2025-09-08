@@ -18,6 +18,7 @@ module.exports = (bot) => {
 • /start - Restart bot &amp; show main menu
 • /call - Start a new voice call
 • /sms - Send an SMS message
+• /app - Open web app for advanced actions
 • /smsconversation &lt;phone&gt; - View SMS conversation
 • /transcript &lt;call_sid&gt; - Get call transcript
 • /calls [limit] - List recent calls (max 50)

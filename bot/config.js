@@ -26,8 +26,8 @@ module.exports = {
     username: process.env.ADMIN_TELEGRAM_USERNAME
   },
   apiUrl: process.env.API_BASE,
-  botToken: process.env.BOT_TOKEN
-},{
+  botToken: process.env.BOT_TOKEN,
+
   // New Mini App configuration
   webAppUrl: process.env.WEB_APP_URL || 'http://127.0.0.1/miniapp.html',
   webAppSecret: process.env.WEB_APP_SECRET || 'your-web-app-secret',

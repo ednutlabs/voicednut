@@ -5,7 +5,7 @@ const crypto = require('crypto');
 const config = require('../config');
 
 const app = express();
-const PORT = config.webAppPort || 8080;
+const PORT = config.webAppPort;
 
 // CORS configuration for Telegram Mini Apps
 app.use(cors({
