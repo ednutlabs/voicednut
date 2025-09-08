@@ -1,4 +1,4 @@
-// Mini App integration
+// bot/commands/webapp.js - New file for Mini App integration
 const { InlineKeyboard } = require('grammy');
 const { getUser, isAdmin } = require('../db/db');
 const crypto = require('crypto');
