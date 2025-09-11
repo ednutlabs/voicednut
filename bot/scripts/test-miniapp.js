@@ -1,6 +1,7 @@
 const axios = require('axios');
 const fs = require('fs');
 const path = require('path');
+require('dotenv').config({ path: path.join(__dirname, '../.env') });
 
 async function testMiniApp() {
     console.log('🧪 Testing Mini App deployment...\n');
@@ -13,7 +14,7 @@ async function testMiniApp() {
     }
     
     // Try to get the Vercel URL from environment or ask user
-    let appUrl = process.env.VERCEL_URL;
+    let appUrl = process.env.WEB_APP_URL;
     if (!appUrl) {
         console.log('🌐 Please provide your Vercel app URL (e.g., your-app.vercel.app):');
         appUrl = 'your-app.vercel.app'; // Placeholder - in real usage, you'd prompt for input

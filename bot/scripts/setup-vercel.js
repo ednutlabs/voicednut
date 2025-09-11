@@ -10,25 +10,25 @@ if (!fs.existsSync(vercelConfigPath)) {
     console.log('📝 Creating vercel.json configuration...');
     const vercelConfig = {
         "version": 2,
-        "name": "voice-call-bot-miniapp",
+        "name": "voicednut",
         "builds": [
             {
-                "src": "bot/server/webapp.js",
+                "src": "server/webapp.js",
                 "use": "@vercel/node"
             }
         ],
         "routes": [
             {
                 "src": "/miniapp.html",
-                "dest": "/bot/public/miniapp.html"
+                "dest": "public/miniapp.html"
             },
             {
                 "src": "/api/(.*)",
-                "dest": "/bot/server/webapp.js"
+                "dest": "server/webapp.js"
             },
             {
                 "src": "/(.*)",
-                "dest": "/bot/server/webapp.js"
+                "dest": "server/webapp.js"
             }
         ],
         "env": {

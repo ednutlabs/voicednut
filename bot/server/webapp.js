@@ -10,7 +10,7 @@ app.use(cors({
     origin: [
         'https://web.telegram.org',
         'https://t.me',
-        process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : 'http://localhost:3000'
+        process.env.WEB_APP_URL ? `https://${process.env.WEB_APP_URL}` : 'http://localhost:3000'
     ],
     credentials: true
 }));
@@ -22,7 +22,7 @@ app.use(express.static(path.join(__dirname, '../public')));
 app.get('/', (req, res) => {
     res.json({ 
         status: 'healthy', 
-        service: 'voice-call-bot-miniapp',
+        service: 'voicednut',
         timestamp: new Date().toISOString(),
         message: 'Mini App Server Running on Vercel'
     });
