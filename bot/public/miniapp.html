@@ -454,24 +454,21 @@
         <!-- Header -->
         <div class="header">
             <div class="header-content">
-                <h1>🎙️ Voice Call Bot</h1>
-                <div class="subtitle">AI-Powered Communication Platform</div>
+                <h1>Voicednut Bot</h1>
+                <div class="subtitle">Voice Call & SMS Interface</div>
             </div>
         </div>
 
         <!-- User Info -->
         <div class="user-info">
             <div class="user-details">
-                <div class="user-avatar" id="userAvatar">👤</div>
+                <div class="user-avatar" id="userAvatar">G</div>
                 <div class="user-text">
-                    <h3 id="userName">Loading...</h3>
-                    <p id="userRole">Checking authorization...</p>
+                    <h3 id="userName">Guest User</h3>
+                    <p id="userStatus"><span class="status-indicator status-offline"></span>Connecting...</p>
                 </div>
-                <div class="status-indicator status-online"></div>
             </div>
-        </div>
-
-        <!-- Main Content -->
+        </div>        <!-- Main Content -->
         <div class="main-content">
             <!-- Quick Actions -->
             <div class="quick-actions">
@@ -628,16 +625,39 @@
         
         // Validate initialization
         if (!tg) {
-            console.error('Telegram WebApp is not available');
-            document.body.innerHTML = '<div style="padding: 20px; text-align: center;">Please open this app through Telegram.</div>';
+            console.error('Telegram WebApp is not properly initialized');
+            document.body.innerHTML = '<div style="padding: 20px; color: red;">Error: This app must be opened from Telegram.</div>';
             return;
         }
         
         // Initialize the Web App
         tg.ready();
         tg.expand();
-
-        // User data
+        
+        // Validate WebApp data with backend
+        async function validateWebAppData() {
+            try {
+                const response = await fetch('/api/validate-webapp-data', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        initData: tg.initData
+                    })
+                });
+                
+                const data = await response.json();
+                if (!data.valid) {
+                    throw new Error('Invalid WebApp data');
+                }
+            } catch (error) {
+                console.error('WebApp validation failed:', error);
+                showNotification('Authentication failed. Please try again.', 'error');
+                return false;
+            }
+            return true;
+        }        // User data
         let userData = {
             id: tg.initDataUnsafe?.user?.id || 'demo',
             username: tg.initDataUnsafe?.user?.username || 'demo_user',
@@ -647,7 +667,26 @@
         };
 
         // Initialize app
-        function initApp() {
+                async function initApp() {
+            // First validate the WebApp data
+            const isValid = await validateWebAppData();
+            if (!isValid) return;
+            
+            // Update user information
+            await updateUserInfo();
+            
+            // Load recent activity
+            await loadRecentActivity();
+            
+            // Setup form handlers
+            setupFormHandlers();
+            
+            // Setup message counter for SMS
+            setupMessageCounter();
+            
+            // Show the app is ready
+            showNotification('App initialized successfully', 'success');
+        }
             updateUserInfo();
             loadRecentActivity();
             setupFormHandlers();
@@ -659,7 +698,7 @@
                 tg.MainButton.onClick(() => tg.close());
                 tg.MainButton.hide();
             }
-        }
+        
 
         function updateUserInfo() {
             const avatar = document.getElementById('userAvatar');
@@ -702,7 +741,86 @@
         }
 
         // Form handlers
-        function setupFormHandlers() {
+                function setupFormHandlers() {
+            // Call Form Handler
+            document.getElementById('callForm').addEventListener('submit', async (e) => {
+                e.preventDefault();
+                setLoading('call', true);
+                
+                try {
+                    const formData = {
+                        action: 'call',
+                        phone: document.getElementById('callPhone').value,
+                        prompt: document.getElementById('callPrompt').value,
+                        first_message: document.getElementById('firstMessage').value
+                    };
+                    
+                    const response = await fetch('/api/outbound-call', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                        },
+                        body: JSON.stringify({
+                            ...formData,
+                            initData: tg.initData
+                        })
+                    });
+                    
+                    const data = await response.json();
+                    if (data.success) {
+                        showNotification('Call initiated successfully!', 'success');
+                        closeSheet('callSheet');
+                        document.getElementById('callForm').reset();
+                    } else {
+                        throw new Error(data.error || 'Failed to initiate call');
+                    }
+                } catch (error) {
+                    console.error('Call error:', error);
+                    showNotification(error.message || 'Failed to place call', 'error');
+                } finally {
+                    setLoading('call', false);
+                }
+            });
+            
+            // SMS Form Handler
+            document.getElementById('smsForm').addEventListener('submit', async (e) => {
+                e.preventDefault();
+                setLoading('sms', true);
+                
+                try {
+                    const formData = {
+                        action: 'sms',
+                        phone: document.getElementById('smsPhone').value,
+                        message: document.getElementById('smsMessage').value
+                    };
+                    
+                    const response = await fetch('/api/send-sms', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                        },
+                        body: JSON.stringify({
+                            ...formData,
+                            initData: tg.initData
+                        })
+                    });
+                    
+                    const data = await response.json();
+                    if (data.success) {
+                        showNotification('SMS sent successfully!', 'success');
+                        closeSheet('smsSheet');
+                        document.getElementById('smsForm').reset();
+                    } else {
+                        throw new Error(data.error || 'Failed to send SMS');
+                    }
+                } catch (error) {
+                    console.error('SMS error:', error);
+                    showNotification(error.message || 'Failed to send SMS', 'error');
+                } finally {
+                    setLoading('sms', false);
+                }
+            });
+        }
             // Call form
             document.getElementById('callForm').addEventListener('submit', async (e) => {
                 e.preventDefault();
@@ -788,7 +906,6 @@
                     setLoading('sms', false);
                 }
             });
-        }
 
         function setupMessageCounter() {
             const textarea = document.getElementById('smsMessage');

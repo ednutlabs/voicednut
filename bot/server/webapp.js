@@ -2,7 +2,7 @@ const express = require('express');
 const cors = require('cors');
 const path = require('path');
 const crypto = require('crypto');
-
+require('dotenv').config();
 const app = express();
 
 // CORS configuration for Telegram Mini Apps
@@ -10,15 +10,35 @@ const corsOrigins = process.env.CORS_ORIGINS ?
     process.env.CORS_ORIGINS.split(',') : 
     ['https://web.telegram.org', 'https://t.me', 'http://localhost:3000'];
 
+// Add all Telegram domains
+corsOrigins.push(
+    'https://*.web.telegram.org',
+    'https://web.telegram.org',
+    'https://t.me'
+);
+
 app.use(cors({
     origin: (origin, callback) => {
-        if (!origin || corsOrigins.includes(origin)) {
+        // Allow requests with no origin (like mobile apps or curl requests)
+        if (!origin) return callback(null, true);
+        
+        // Check if the origin matches any allowed pattern
+        const isAllowed = corsOrigins.some(allowed => {
+            if (allowed.includes('*')) {
+                const pattern = new RegExp('^' + allowed.replace('*', '.*') + '$');
+                return pattern.test(origin);
+            }
+            return allowed === origin;
+        });
+        
+        if (isAllowed) {
             callback(null, true);
         } else {
             callback(new Error('Not allowed by CORS'));
         }
     },
-    credentials: true
+    credentials: true,
+    methods: ['GET', 'POST', 'OPTIONS']
 }));
 
 app.use(express.json());
@@ -100,30 +120,118 @@ app.get('/api/user-stats/:userId', async (req, res) => {
 // Proxy calls to your main API
 app.post('/api/outbound-call', async (req, res) => {
     try {
+        // Validate required fields
+        const { phone, prompt, first_message, initData } = req.body;
+        if (!phone || !prompt || !first_message || !initData) {
+            return res.status(400).json({ 
+                error: 'Missing required fields',
+                details: 'Phone, prompt, first_message and initData are required'
+            });
+        }
+
+        // Validate phone format
+        const e164Regex = /^\+[1-9]\d{1,14}$/;
+        if (!e164Regex.test(phone.trim())) {
+            return res.status(400).json({ 
+                error: 'Invalid phone number format',
+                details: 'Phone number must be in E.164 format (e.g., +1234567890)'
+            });
+        }
+
+        // Validate Telegram Web App data
+        if (!validateTelegramWebAppData(initData)) {
+            return res.status(401).json({ 
+                error: 'Invalid authentication',
+                details: 'WebApp data validation failed'
+            });
+        }
+
         const axios = require('axios');
-        const response = await axios.post(`${process.env.API_URL}/outbound-call`, req.body, {
-            headers: { 'Content-Type': 'application/json' },
+        const response = await axios.post(`${process.env.API_URL}/outbound-call`, {
+            number: phone,
+            prompt: prompt,
+            first_message: first_message
+        }, {
+            headers: { 
+                'Content-Type': 'application/json'
+            },
             timeout: 30000
         });
-        res.json(response.data);
+
+        res.json({
+            success: true,
+            call_sid: response.data.call_sid,
+            status: response.data.status,
+            to: phone
+        });
     } catch (error) {
         console.error('Call proxy error:', error);
-        res.status(500).json({ error: error.message });
+        res.status(error.response?.status || 500).json({ 
+            error: error.response?.data?.error || error.message,
+            details: error.response?.data?.details || 'An unexpected error occurred'
+        });
     }
 });
 
 // Proxy SMS requests
 app.post('/api/send-sms', async (req, res) => {
     try {
+        // Validate required fields
+        const { phone, message, initData } = req.body;
+        if (!phone || !message || !initData) {
+            return res.status(400).json({ 
+                error: 'Missing required fields',
+                details: 'Phone, message and initData are required'
+            });
+        }
+
+        // Validate phone format
+        if (!phone.startsWith('+') || phone.length < 10) {
+            return res.status(400).json({ 
+                error: 'Invalid phone number format',
+                details: 'Phone number must start with + and be at least 10 digits'
+            });
+        }
+
+        // Validate message length
+        if (message.length > 1600) {
+            return res.status(400).json({ 
+                error: 'Message too long',
+                details: 'SMS message must be 1600 characters or less'
+            });
+        }
+
+        // Validate Telegram Web App data
+        if (!validateTelegramWebAppData(initData)) {
+            return res.status(401).json({ 
+                error: 'Invalid authentication',
+                details: 'WebApp data validation failed'
+            });
+        }
+
         const axios = require('axios');
-        const response = await axios.post(`${process.env.API_URL}/send-sms`, req.body, {
-            headers: { 'Content-Type': 'application/json' },
+        const response = await axios.post(`${process.env.API_URL}/send-sms`, {
+            to: phone,
+            message: message
+        }, {
+            headers: { 
+                'Content-Type': 'application/json'
+            },
             timeout: 30000
         });
-        res.json(response.data);
+
+        res.json({
+            success: true,
+            message_sid: response.data.message_sid,
+            status: response.data.status,
+            to: phone
+        });
     } catch (error) {
         console.error('SMS proxy error:', error);
-        res.status(500).json({ error: error.message });
+        res.status(error.response?.status || 500).json({ 
+            error: error.response?.data?.error || error.message,
+            details: error.response?.data?.details || 'An unexpected error occurred'
+        });
     }
 });
 

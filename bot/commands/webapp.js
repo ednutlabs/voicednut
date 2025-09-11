@@ -1,5 +1,3 @@
-// bot/commands/webapp.js - New file for Mini App integration
-
 const { InlineKeyboard } = require('grammy');
 const { getUser, isAdmin } = require('../db/db');
 const crypto = require('crypto');
@@ -20,10 +18,10 @@ module.exports = (bot) => {
             const webAppUrl = `${config.webAppUrl || 'https://your-domain.com/miniapp.html'}`;
             
             const keyboard = new InlineKeyboard()
-                .webApp('🚀 Open Voice Call App', webAppUrl);
+                .webApp('🚀 Open Voicednut App', webAppUrl);
 
             await ctx.reply(
-                '🎙️ *Voice Call Bot Mini App*\n\n' +
+                '🎙️ *Voicednut Bot Mini App*\n\n' +
                 'Click the button below to open the enhanced interface with:\n' +
                 '• 📞 Easy voice call setup\n' +
                 '• 💬 SMS messaging\n' +
