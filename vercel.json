@@ -1,6 +1,5 @@
 {
   "version": 2,
-  "name": "voicednut-miniapp",
   "builds": [
     {
       "src": "bot/server/webapp.js",
@@ -112,11 +111,6 @@
   "env": {
     "NODE_ENV": "production",
     "TZ": "UTC"
-  },
-  "functions": {
-    "bot/server/webapp.js": {
-      "maxDuration": 30
-    }
   },
   "regions": ["iad1"],
   "rewrites": [
