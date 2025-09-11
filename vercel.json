@@ -109,8 +109,7 @@
     }
   ],
   "env": {
-    "NODE_ENV": "production",
-    "TZ": "UTC"
+    "NODE_ENV": "production"
   },
   "regions": ["iad1"],
   "rewrites": [
