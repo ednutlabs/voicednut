@@ -625,6 +625,15 @@
     <script>
         // Initialize Telegram Web App
         const tg = window.Telegram.WebApp;
+        
+        // Validate initialization
+        if (!tg) {
+            console.error('Telegram WebApp is not available');
+            document.body.innerHTML = '<div style="padding: 20px; text-align: center;">Please open this app through Telegram.</div>';
+            return;
+        }
+        
+        // Initialize the Web App
         tg.ready();
         tg.expand();
 

@@ -6,12 +6,18 @@ const crypto = require('crypto');
 const app = express();
 
 // CORS configuration for Telegram Mini Apps
+const corsOrigins = process.env.CORS_ORIGINS ? 
+    process.env.CORS_ORIGINS.split(',') : 
+    ['https://web.telegram.org', 'https://t.me', 'http://localhost:3000'];
+
 app.use(cors({
-    origin: [
-        'https://web.telegram.org',
-        'https://t.me',
-        process.env.WEB_APP_URL ? `https://${process.env.WEB_APP_URL}` : 'http://localhost:3000'
-    ],
+    origin: (origin, callback) => {
+        if (!origin || corsOrigins.includes(origin)) {
+            callback(null, true);
+        } else {
+            callback(new Error('Not allowed by CORS'));
+        }
+    },
     credentials: true
 }));
 

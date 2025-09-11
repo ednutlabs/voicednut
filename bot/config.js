@@ -25,7 +25,7 @@ module.exports = {
     userId: process.env.ADMIN_TELEGRAM_ID,
     username: process.env.ADMIN_TELEGRAM_USERNAME
   },
-  apiUrl: process.env.API_BASE,
+  apiUrl: process.env.API_URL,
   botToken: process.env.BOT_TOKEN,
 
   // New Mini App configuration
