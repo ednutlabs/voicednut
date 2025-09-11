@@ -13,72 +13,55 @@
       "use": "@vercel/static"
     }
   ],
-  "routes": [
+  "rewrites": [
     {
-      "src": "/miniapp.html",
-      "dest": "/bot/public/miniapp.html",
-      "headers": {
-        "Cache-Control": "public, max-age=3600"
-      }
+      "source": "/miniapp.html",
+      "destination": "/bot/public/miniapp.html"
     },
     {
-      "src": "/api/validate-webapp-data",
-      "dest": "/bot/server/webapp.js",
-      "methods": ["POST", "OPTIONS"]
+      "source": "/api/validate-webapp-data",
+      "destination": "/bot/server/webapp.js"
     },
     {
-      "src": "/api/user/(.*)",
-      "dest": "/bot/server/webapp.js",
-      "methods": ["GET", "OPTIONS"]
+      "source": "/api/user/:path*",
+      "destination": "/bot/server/webapp.js"
     },
     {
-      "src": "/api/user-stats/(.*)",
-      "dest": "/bot/server/webapp.js",
-      "methods": ["GET", "OPTIONS"]
+      "source": "/api/user-stats/:path*",
+      "destination": "/bot/server/webapp.js"
     },
     {
-      "src": "/api/user-activity/(.*)",
-      "dest": "/bot/server/webapp.js",
-      "methods": ["GET", "OPTIONS"]
+      "source": "/api/user-activity/:path*",
+      "destination": "/bot/server/webapp.js"
     },
     {
-      "src": "/api/outbound-call",
-      "dest": "/bot/server/webapp.js",
-      "methods": ["POST", "OPTIONS"]
+      "source": "/api/outbound-call",
+      "destination": "/bot/server/webapp.js"
     },
     {
-      "src": "/api/send-sms",
-      "dest": "/bot/server/webapp.js",
-      "methods": ["POST", "OPTIONS"]
+      "source": "/api/send-sms",
+      "destination": "/bot/server/webapp.js"
     },
     {
-      "src": "/debug",
-      "dest": "/bot/server/webapp.js",
-      "methods": ["GET"]
+      "source": "/debug",
+      "destination": "/bot/server/webapp.js"
     },
     {
-      "src": "/api/(.*)",
-      "dest": "/bot/server/webapp.js"
+      "source": "/api/:path*",
+      "destination": "/bot/server/webapp.js"
     },
     {
-      "src": "/(.*\\.(css|js|png|jpg|jpeg|gif|ico|svg|woff|woff2|ttf|eot))",
-      "dest": "/bot/public/$1",
-      "headers": {
-        "Cache-Control": "public, max-age=31536000, immutable"
-      }
+      "source": "/",
+      "destination": "/bot/server/webapp.js"
     },
     {
-      "src": "/",
-      "dest": "/bot/server/webapp.js"
-    },
-    {
-      "src": "/(.*)",
-      "dest": "/bot/server/webapp.js"
+      "source": "/:path*",
+      "destination": "/bot/server/webapp.js"
     }
   ],
   "headers": [
     {
-      "source": "/api/(.*)",
+      "source": "/api/:path*",
       "headers": [
         {
           "key": "Access-Control-Allow-Origin",
@@ -91,6 +74,10 @@
         {
           "key": "Access-Control-Allow-Headers",
           "value": "X-Requested-With, Content-Type, Authorization"
+        },
+        {
+          "key": "Cache-Control",
+          "value": "no-store, no-cache, must-revalidate"
         }
       ]
     },
@@ -104,8 +91,13 @@
         {
           "key": "Content-Security-Policy",
           "value": "default-src 'self' 'unsafe-inline' 'unsafe-eval' https://telegram.org https://*.telegram.org https://web.telegram.org https://*.web.telegram.org; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://telegram.org https://*.telegram.org; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; font-src 'self' data: https:; connect-src 'self' https: wss:;"
+        },
+        {
+          "key": "Cache-Control",
+          "value": "public, max-age=3600"
         }
       ]
+<<<<<<< HEAD
     }
   ],
   "env": {
@@ -116,10 +108,17 @@
     {
       "source": "/app",
       "destination": "/miniapp.html"
+=======
+>>>>>>> d97c7e2 (Fix mini app initialization and form handling)
     },
     {
-      "source": "/miniapp",
-      "destination": "/miniapp.html"
+      "source": "/(.*\\.(css|js|png|jpg|jpeg|gif|ico|svg|woff|woff2|ttf|eot))",
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "public, max-age=31536000, immutable"
+        }
+      ]
     }
   ],
   "redirects": [
@@ -134,6 +133,10 @@
       "permanent": true
     }
   ],
+  "env": {
+    "NODE_ENV": "production"
+  },
+  "regions": ["iad1"],
   "trailingSlash": false,
   "cleanUrls": true
 }
