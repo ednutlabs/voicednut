@@ -6,7 +6,7 @@
 
 require('dotenv').config();
 const required = [
-  'ADMIN_TELEGRAM_ID', 'ADMIN_TELEGRAM_USERNAME', 'API_BASE', 'BOT_TOKEN'
+  'ADMIN_TELEGRAM_ID', 'ADMIN_TELEGRAM_USERNAME', 'API_URL', 'BOT_TOKEN', 'WEB_APP_URL'
 ];
 
 // Check for required environment variables
