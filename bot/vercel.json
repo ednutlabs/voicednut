@@ -1,0 +1,27 @@
+{
+  "version": 2,
+  "name": "voicednut",
+  "builds": [
+    {
+      "src": "server/webapp.js",
+      "use": "@vercel/node"
+    }
+  ],
+  "routes": [
+    {
+      "src": "/miniapp.html",
+      "dest": "/public/miniapp.html"
+    },
+    {
+      "src": "/api/(.*)",
+      "dest": "/server/webapp.js"
+    },
+    {
+      "src": "/(.*)",
+      "dest": "/server/webapp.js"
+    }
+  ],
+  "env": {
+    "NODE_ENV": "production"
+  }
+}

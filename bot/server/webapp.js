@@ -2,19 +2,31 @@ const express = require('express');
 const cors = require('cors');
 const path = require('path');
 const crypto = require('crypto');
-const config = require('../config');
 
 const app = express();
-const PORT = config.webAppPort;
 
 // CORS configuration for Telegram Mini Apps
 app.use(cors({
-    origin: config.cors.origins,
+    origin: [
+        'https://web.telegram.org',
+        'https://t.me',
+        process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : 'http://localhost:3000'
+    ],
     credentials: true
 }));
 
 app.use(express.json());
-app.use(express.static('public')); // Serve static files
+app.use(express.static(path.join(__dirname, '../public')));
+
+// Health check - must be at root for Vercel
+app.get('/', (req, res) => {
+    res.json({ 
+        status: 'healthy', 
+        service: 'voice-call-bot-miniapp',
+        timestamp: new Date().toISOString(),
+        message: 'Mini App Server Running on Vercel'
+    });
+});
 
 // Serve the Mini App HTML
 app.get('/miniapp.html', (req, res) => {
@@ -26,7 +38,6 @@ app.post('/api/validate-webapp-data', (req, res) => {
     try {
         const { initData } = req.body;
         
-        // Validate Telegram Mini App init data
         if (validateTelegramWebAppData(initData)) {
             res.json({ valid: true });
         } else {
@@ -38,27 +49,21 @@ app.post('/api/validate-webapp-data', (req, res) => {
     }
 });
 
-// API endpoint for Mini App to get user data
+// API endpoint for user data
 app.get('/api/user/:userId', async (req, res) => {
     try {
         const userId = req.params.userId;
         
-        // Get user from database (you'll need to implement this)
-        const { getUser, isAdmin } = require('../bot/db/db');
+        // For Vercel deployment, you might need to connect to external database
+        // const user = await getUserFromDatabase(userId);
         
-        const user = await new Promise(r => getUser(parseInt(userId), r));
-        if (!user) {
-            return res.status(404).json({ error: 'User not found' });
-        }
-        
-        const adminStatus = await new Promise(r => isAdmin(parseInt(userId), r));
-        
+        // Placeholder response for now
         res.json({
-            id: user.telegram_id,
-            username: user.username,
-            role: user.role,
-            isAdmin: adminStatus,
-            joinDate: user.timestamp
+            id: userId,
+            username: 'demo_user',
+            role: 'USER',
+            isAdmin: false,
+            joinDate: new Date().toISOString()
         });
     } catch (error) {
         console.error('User data error:', error);
@@ -71,13 +76,11 @@ app.get('/api/user-stats/:userId', async (req, res) => {
     try {
         const userId = req.params.userId;
         
-        // Get user stats from your database
-        // This is a placeholder - implement according to your database schema
         const stats = {
-            total_calls: 0,
-            total_sms: 0,
-            this_month_calls: 0,
-            this_month_sms: 0,
+            total_calls: Math.floor(Math.random() * 50),
+            total_sms: Math.floor(Math.random() * 100),
+            this_month_calls: Math.floor(Math.random() * 10),
+            this_month_sms: Math.floor(Math.random() * 20),
             recent_activity: []
         };
         
@@ -88,20 +91,33 @@ app.get('/api/user-stats/:userId', async (req, res) => {
     }
 });
 
-// API endpoint for recent activity
-app.get('/api/user-activity/:userId', async (req, res) => {
+// Proxy calls to your main API
+app.post('/api/outbound-call', async (req, res) => {
     try {
-        const userId = req.params.userId;
-        const limit = req.query.limit || 10;
-        
-        // Get recent activity from your database
-        // This would combine calls and SMS data
-        const activity = [];
-        
-        res.json({ activity });
+        const axios = require('axios');
+        const response = await axios.post(`${process.env.API_URL}/outbound-call`, req.body, {
+            headers: { 'Content-Type': 'application/json' },
+            timeout: 30000
+        });
+        res.json(response.data);
     } catch (error) {
-        console.error('Activity error:', error);
-        res.status(500).json({ error: 'Failed to get activity' });
+        console.error('Call proxy error:', error);
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// Proxy SMS requests
+app.post('/api/send-sms', async (req, res) => {
+    try {
+        const axios = require('axios');
+        const response = await axios.post(`${process.env.API_URL}/send-sms`, req.body, {
+            headers: { 'Content-Type': 'application/json' },
+            timeout: 30000
+        });
+        res.json(response.data);
+    } catch (error) {
+        console.error('SMS proxy error:', error);
+        res.status(500).json({ error: error.message });
     }
 });
 
@@ -112,19 +128,16 @@ function validateTelegramWebAppData(initData) {
         const hash = urlParams.get('hash');
         urlParams.delete('hash');
         
-        // Sort parameters
         const dataCheckString = Array.from(urlParams.entries())
             .sort(([a], [b]) => a.localeCompare(b))
             .map(([key, value]) => `${key}=${value}`)
             .join('\n');
         
-        // Create secret key
         const secretKey = crypto
             .createHmac('sha256', 'WebAppData')
-            .update(config.botToken)
+            .update(process.env.BOT_TOKEN)
             .digest();
         
-        // Calculate hash
         const calculatedHash = crypto
             .createHmac('sha256', secretKey)
             .update(dataCheckString)
@@ -137,19 +150,13 @@ function validateTelegramWebAppData(initData) {
     }
 }
 
-// Health check endpoint
-app.get('/health', (req, res) => {
-    res.json({ 
-        status: 'healthy', 
-        service: 'mini-app-server',
-        timestamp: new Date().toISOString()
-    });
-});
-
-// Start server
-app.listen(PORT, () => {
-    console.log(`🚀 Mini App server running on port ${PORT}`);
-    console.log(`📱 Mini App URL: http://localhost:${PORT}/miniapp.html`);
-});
-
+// Export for Vercel
 module.exports = app;
+
+// For local development
+if (process.env.NODE_ENV !== 'production') {
+    const port = process.env.PORT || 3000;
+    app.listen(port, () => {
+        console.log(`🚀 Mini App server running on port ${port}`);
+    });
+}

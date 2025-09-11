@@ -1,39 +1,52 @@
 {
   "name": "bot",
   "version": "2.0.0",
-  "description": "Telegram bot for making AI-powered voice calls",
-  "main": "bot.js",
+  "description": "AI-powered voice calling bot with Mini App interface",
+  "main": "bot/bot.js",
   "scripts": {
-    "start": "node bot.js",
-    "start:webapp": "node server/webapp.js",
+    "start": "node bot/bot.js",
+    "start:webapp": "node bot/server/webapp.js",
     "start:all": "concurrently \"npm run start\" \"npm run start:webapp\"",
-    "dev": "nodemon bot.js",
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "dev": "concurrently \"nodemon bot/bot.js\" \"nodemon bot/server/webapp.js\"",
+    "dev:bot": "nodemon bot/bot.js",
+    "dev:webapp": "nodemon bot/server/webapp.js",
+    "deploy:vercel": "vercel --prod --confirm",
+    "deploy:preview": "vercel",
+    "deploy:setup": "node scripts/setup-vercel.js",
+    "logs:vercel": "vercel logs",
+    "env:pull": "vercel env pull .env.local",
+    "env:list": "vercel env ls",
+    "test:miniapp": "node scripts/test-miniapp.js",
+    "validate:config": "node scripts/validate-config.js"
   },
-  "keywords": [
-    "telegram",
-    "bot",
-    "voice",
-    "ai",
-    "calls",
-    "twilio"
-  ],
-  "author": "Tunde Ednut",
-  "license": "MIT",
   "dependencies": {
     "@grammyjs/conversations": "^1.2.0",
-    "axios": "^1.6.0",
-    "concurrently": "^9.2.1",
+    "axios": "^1.6.2",
     "cors": "^2.8.5",
     "dotenv": "^16.3.1",
-    "express": "^5.1.0",
-    "grammy": "^1.19.2",
+    "express": "^4.18.2",
+    "grammy": "^1.21.1",
     "sqlite3": "^5.1.6"
   },
   "devDependencies": {
-    "nodemon": "^3.0.1"
+    "concurrently": "^8.2.2",
+    "nodemon": "^3.0.2",
+    "vercel": "^41.0.2"
   },
   "engines": {
     "node": ">=16.0.0"
+  },
+  "keywords": [
+    "telegram-bot",
+    "voice-calls",
+    "ai",
+    "miniapp",
+    "sms"
+  ],
+  "author": "Tunde Ednut",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/ednutlabs/voicednut.git"
   }
 }
