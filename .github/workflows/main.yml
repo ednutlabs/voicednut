@@ -37,10 +37,6 @@ jobs:
             echo "📦 Updating project..."
             # Navigate to project root
             cd /home/ubuntu/voicednut
-
-            # Fetch and reset to ensure clean state
-            git fetch origin
-            git reset --hard origin/main
             
             echo "🚀 Deploying API..."
             # Deploy API
