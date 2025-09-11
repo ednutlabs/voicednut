@@ -13,130 +13,54 @@
       "use": "@vercel/static"
     }
   ],
-  "rewrites": [
+  "routes": [
     {
-      "source": "/miniapp.html",
-      "destination": "/bot/public/miniapp.html"
+      "src": "/miniapp.html",
+      "dest": "/bot/public/miniapp.html",
+      "headers": {
+        "Cache-Control": "public, max-age=3600",
+        "X-Frame-Options": "ALLOWALL",
+        "Content-Security-Policy": "default-src 'self' 'unsafe-inline' 'unsafe-eval' https://telegram.org https://*.telegram.org https://web.telegram.org https://*.web.telegram.org; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://telegram.org https://*.telegram.org; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; font-src 'self' data: https:; connect-src 'self' https: wss:;"
+      }
     },
     {
-      "source": "/api/validate-webapp-data",
-      "destination": "/bot/server/webapp.js"
+      "src": "/api/(.*)",
+      "dest": "/bot/server/webapp.js",
+      "headers": {
+        "Access-Control-Allow-Origin": "*",
+        "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
+        "Access-Control-Allow-Headers": "X-Requested-With, Content-Type, Authorization",
+        "Cache-Control": "no-store, no-cache, must-revalidate"
+      }
     },
     {
-      "source": "/api/user/:path*",
-      "destination": "/bot/server/webapp.js"
+      "src": "/(.*\\.(css|js|png|jpg|jpeg|gif|ico|svg|woff|woff2|ttf|eot))",
+      "dest": "/bot/public/$1",
+      "headers": {
+        "Cache-Control": "public, max-age=31536000, immutable"
+      }
     },
     {
-      "source": "/api/user-stats/:path*",
-      "destination": "/bot/server/webapp.js"
+      "src": "/app",
+      "dest": "/bot/public/miniapp.html"
     },
     {
-      "source": "/api/user-activity/:path*",
-      "destination": "/bot/server/webapp.js"
+      "src": "/mini-app.html",
+      "status": 308,
+      "headers": { "Location": "/miniapp.html" }
     },
     {
-      "source": "/api/outbound-call",
-      "destination": "/bot/server/webapp.js"
+      "src": "/webapp.html",
+      "status": 308,
+      "headers": { "Location": "/miniapp.html" }
     },
     {
-      "source": "/api/send-sms",
-      "destination": "/bot/server/webapp.js"
-    },
-    {
-      "source": "/debug",
-      "destination": "/bot/server/webapp.js"
-    },
-    {
-      "source": "/api/:path*",
-      "destination": "/bot/server/webapp.js"
-    },
-    {
-      "source": "/",
-      "destination": "/bot/server/webapp.js"
-    },
-    {
-      "source": "/:path*",
-      "destination": "/bot/server/webapp.js"
-    }
-  ],
-  "headers": [
-    {
-      "source": "/api/:path*",
-      "headers": [
-        {
-          "key": "Access-Control-Allow-Origin",
-          "value": "*"
-        },
-        {
-          "key": "Access-Control-Allow-Methods",
-          "value": "GET, POST, PUT, DELETE, OPTIONS"
-        },
-        {
-          "key": "Access-Control-Allow-Headers",
-          "value": "X-Requested-With, Content-Type, Authorization"
-        },
-        {
-          "key": "Cache-Control",
-          "value": "no-store, no-cache, must-revalidate"
-        }
-      ]
-    },
-    {
-      "source": "/miniapp.html",
-      "headers": [
-        {
-          "key": "X-Frame-Options",
-          "value": "ALLOWALL"
-        },
-        {
-          "key": "Content-Security-Policy",
-          "value": "default-src 'self' 'unsafe-inline' 'unsafe-eval' https://telegram.org https://*.telegram.org https://web.telegram.org https://*.web.telegram.org; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://telegram.org https://*.telegram.org; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; font-src 'self' data: https:; connect-src 'self' https: wss:;"
-        },
-        {
-          "key": "Cache-Control",
-          "value": "public, max-age=3600"
-        }
-      ]
-<<<<<<< HEAD
+      "src": "/(.*)",
+      "dest": "/bot/server/webapp.js"
     }
   ],
   "env": {
     "NODE_ENV": "production"
   },
-  "regions": ["iad1"],
-  "rewrites": [
-    {
-      "source": "/app",
-      "destination": "/miniapp.html"
-=======
->>>>>>> d97c7e2 (Fix mini app initialization and form handling)
-    },
-    {
-      "source": "/(.*\\.(css|js|png|jpg|jpeg|gif|ico|svg|woff|woff2|ttf|eot))",
-      "headers": [
-        {
-          "key": "Cache-Control",
-          "value": "public, max-age=31536000, immutable"
-        }
-      ]
-    }
-  ],
-  "redirects": [
-    {
-      "source": "/mini-app.html",
-      "destination": "/miniapp.html",
-      "permanent": true
-    },
-    {
-      "source": "/webapp.html",
-      "destination": "/miniapp.html",
-      "permanent": true
-    }
-  ],
-  "env": {
-    "NODE_ENV": "production"
-  },
-  "regions": ["iad1"],
-  "trailingSlash": false,
-  "cleanUrls": true
+  "regions": ["iad1"]
 }
