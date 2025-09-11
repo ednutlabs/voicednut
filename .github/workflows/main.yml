@@ -49,7 +49,7 @@ jobs:
             # Remove any existing PM2 process for API
             pm2 delete api 2>/dev/null || true
             # Start new PM2 process for API
-            pm2 start ecosystem.config.js --env production --name api
+            pm2 start ecosystem.config.js --env production
 
             echo "🤖 Deploying Bot..."
             # Deploy Bot
@@ -58,7 +58,7 @@ jobs:
             # Remove any existing PM2 process for Bot
             pm2 delete bot 2>/dev/null || true
             # Start new PM2 process for Bot
-            pm2 start ecosystem.config.js --env production --name bot
+            pm2 start ecosystem.config.js --env production
 
             echo "💾 Saving PM2 configuration..."
             # Save new PM2 process list
