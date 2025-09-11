@@ -37,7 +37,7 @@ module.exports = {
   cors: {
     origins: [
       'https://web.telegram.org',
-      process.env.WEB_APP_URL || 'http://127.0.0.1:8080'
+      process.env.WEB_APP_URL
     ]
   }
 };
