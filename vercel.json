@@ -1,16 +1,6 @@
 {
   "version": 2,
   "name": "voicednut-miniapp",
-  "builds": [
-    {
-      "src": "bot/server/webapp.js",
-      "use": "@vercel/node"
-    },
-    {
-      "src": "bot/public/**",
-      "use": "@vercel/static"
-    }
-  ],
   "routes": [
     {
       "src": "/miniapp.html",
