@@ -374,6 +374,7 @@ app.post('/api/outbound-call', async (req, res) => {
             first_message: first_message
         };
         
+        
         const response = await axios.post(`${process.env.API_URL}/outbound-call`, apiPayload, {
             headers: { 
                 'Content-Type': 'application/json'
