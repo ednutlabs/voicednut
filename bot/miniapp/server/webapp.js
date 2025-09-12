@@ -496,7 +496,7 @@ app.post('/api/send-sms', async (req, res) => {
         const axios = require('axios');
         console.log('Making SMS API call to:', process.env.API_URL);
         
-        const response = await axios.post(`${process.env.API_URL}/sms/send`, {
+        const response = await axios.post(`${process.env.API_URL}/api/sms/send`, {
             to: phone,
             message: message
         }, {
