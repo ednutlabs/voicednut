@@ -15,7 +15,10 @@ module.exports = (bot) => {
                 return ctx.reply('❌ You are not authorized to use this bot.');
             }
 
-            const webAppUrl = `${config.webAppUrl || 'https://your-domain.com/miniapp.html'}`;
+            // Use the Vercel deployment URL or fallback to config
+            const webAppUrl = process.env.WEBAPP_URL || config.webAppUrl || 'https://your-vercel-app.vercel.app/miniapp.html';
+            
+            console.log('Opening Mini App for user:', ctx.from.id, 'URL:', webAppUrl);
             
             const keyboard = new InlineKeyboard()
                 .webApp('🚀 Open Voicednut App', webAppUrl);
@@ -35,7 +38,7 @@ module.exports = (bot) => {
             );
         } catch (error) {
             console.error('WebApp command error:', error);
-            await ctx.reply('❌ Error opening Mini App. Please try again.');
+            await ctx.reply('❌ Error opening Mini App. Please try again later.');
         }
     });
 
@@ -48,7 +51,7 @@ module.exports = (bot) => {
             }
 
             const webAppData = JSON.parse(ctx.message.web_app_data.data);
-            console.log('Received Mini App data:', webAppData);
+            console.log('Received Mini App data from user', ctx.from.id, ':', webAppData);
 
             await handleMiniAppAction(ctx, webAppData, user);
 
@@ -58,29 +61,36 @@ module.exports = (bot) => {
         }
     });
 
-    // Add Mini App button to existing start command
+    // Add Mini App button to existing start command response
     bot.use(async (ctx, next) => {
-        // Add Mini App option to main menu responses
-        if (ctx.message && ctx.message.text === '/start') {
-            // This will be handled after the main start command
-        }
+        // This middleware can add Mini App buttons to other responses if needed
         await next();
     });
 };
 
 // Handle different actions from Mini App
 async function handleMiniAppAction(ctx, data, user) {
-    const { action, ...params } = data;
+    const { action, result, ...params } = data;
     
-    console.log(`Mini App action: ${action}`, params);
+    console.log(`Mini App action from user ${ctx.from.id}: ${action}`, params);
 
     switch (action) {
         case 'call':
-            await handleMiniAppCall(ctx, params, user);
+            if (result === 'success') {
+                await ctx.reply(`✅ Call initiated successfully!\n🆔 Call SID: \`${params.call_sid}\`\n\n🔔 You'll receive notifications about call progress.`, 
+                    { parse_mode: 'Markdown' });
+            } else {
+                await handleMiniAppCall(ctx, params, user);
+            }
             break;
             
         case 'sms':
-            await handleMiniAppSms(ctx, params, user);
+            if (result === 'success') {
+                await ctx.reply(`✅ SMS sent successfully!\n🆔 Message SID: \`${params.message_sid}\``, 
+                    { parse_mode: 'Markdown' });
+            } else {
+                await handleMiniAppSms(ctx, params, user);
+            }
             break;
             
         case 'get_stats':
@@ -92,25 +102,26 @@ async function handleMiniAppAction(ctx, data, user) {
             break;
             
         default:
-            await ctx.reply('❌ Unknown Mini App action');
+            console.warn('Unknown Mini App action:', action);
+            await ctx.reply('❌ Unknown Mini App action received.');
     }
 }
 
-// Handle call request from Mini App
+// Handle call request from Mini App (fallback if API call failed)
 async function handleMiniAppCall(ctx, params, user) {
     const { phone, prompt, first_message } = params;
     
     try {
         // Validate input
         if (!phone || !prompt || !first_message) {
-            await ctx.answerWebAppQuery('❌ Missing required fields');
+            await ctx.reply('❌ Missing required fields for call');
             return;
         }
 
         // Validate phone format
         const e164Regex = /^\+[1-9]\d{1,14}$/;
         if (!e164Regex.test(phone.trim())) {
-            await ctx.answerWebAppQuery('❌ Invalid phone number format');
+            await ctx.reply('❌ Invalid phone number format');
             return;
         }
 
@@ -123,7 +134,7 @@ async function handleMiniAppCall(ctx, params, user) {
             user_chat_id: ctx.from.id.toString()
         };
 
-        console.log('Mini App call payload:', payload);
+        console.log('Mini App fallback call payload:', payload);
 
         const response = await axios.post(`${config.apiUrl}/outbound-call`, payload, {
             headers: { 'Content-Type': 'application/json' },
@@ -131,16 +142,7 @@ async function handleMiniAppCall(ctx, params, user) {
         });
 
         if (response.data.success && response.data.call_sid) {
-            // Send success response to Mini App
-            await ctx.answerWebAppQuery(JSON.stringify({
-                success: true,
-                message: 'Call initiated successfully!',
-                call_sid: response.data.call_sid,
-                status: response.data.status
-            }));
-
-            // Also send regular message with details
-            const successMsg = `✅ *Call Placed Successfully!*\n\n` +
+            const successMsg = `✅ *Call Placed Successfully via Bot!*\n\n` +
                 `📞 To: ${response.data.to}\n` +
                 `🆔 Call SID: \`${response.data.call_sid}\`\n` +
                 `📊 Status: ${response.data.status}\n\n` +
@@ -148,11 +150,11 @@ async function handleMiniAppCall(ctx, params, user) {
 
             await ctx.reply(successMsg, { parse_mode: 'Markdown' });
         } else {
-            await ctx.answerWebAppQuery('❌ Call failed - unexpected response');
+            await ctx.reply('❌ Call failed - unexpected response from API');
         }
 
     } catch (error) {
-        console.error('Mini App call error:', error);
+        console.error('Mini App fallback call error:', error);
         
         let errorMsg = 'Call failed';
         if (error.response?.data?.error) {
@@ -161,24 +163,24 @@ async function handleMiniAppCall(ctx, params, user) {
             errorMsg = error.message;
         }
 
-        await ctx.answerWebAppQuery(`❌ ${errorMsg}`);
+        await ctx.reply(`❌ ${errorMsg}`);
     }
 }
 
-// Handle SMS request from Mini App
+// Handle SMS request from Mini App (fallback if API call failed)
 async function handleMiniAppSms(ctx, params, user) {
     const { phone, message } = params;
     
     try {
         // Validate input
         if (!phone || !message) {
-            await ctx.answerWebAppQuery('❌ Missing phone number or message');
+            await ctx.reply('❌ Missing phone number or message');
             return;
         }
 
         // Basic phone validation
         if (!phone.startsWith('+') || phone.length < 10) {
-            await ctx.answerWebAppQuery('❌ Invalid phone number format');
+            await ctx.reply('❌ Invalid phone number format');
             return;
         }
 
@@ -196,31 +198,25 @@ async function handleMiniAppSms(ctx, params, user) {
         });
 
         if (response.data.success) {
-            await ctx.answerWebAppQuery(JSON.stringify({
-                success: true,
-                message: 'SMS sent successfully!',
-                message_sid: response.data.message_sid
-            }));
-
-            const successMsg = `✅ *SMS Sent Successfully!*\n\n` +
+            const successMsg = `✅ *SMS Sent Successfully via Bot!*\n\n` +
                 `📱 To: ${phone}\n` +
                 `📄 Message: ${message.substring(0, 50)}${message.length > 50 ? '...' : ''}\n` +
                 `🆔 Message SID: \`${response.data.message_sid}\``;
 
             await ctx.reply(successMsg, { parse_mode: 'Markdown' });
         } else {
-            await ctx.answerWebAppQuery('❌ SMS failed - unexpected response');
+            await ctx.reply('❌ SMS failed - unexpected response from API');
         }
 
     } catch (error) {
-        console.error('Mini App SMS error:', error);
+        console.error('Mini App fallback SMS error:', error);
         
         let errorMsg = 'SMS failed';
         if (error.response?.data?.error) {
             errorMsg = error.response.data.error;
         }
 
-        await ctx.answerWebAppQuery(`❌ ${errorMsg}`);
+        await ctx.reply(`❌ ${errorMsg}`);
     }
 }
 
@@ -229,25 +225,29 @@ async function handleMiniAppStats(ctx, user) {
     try {
         const axios = require('axios');
         
-        // Get user stats (you may need to implement this endpoint)
+        // Get user stats from API
         const response = await axios.get(`${config.apiUrl}/user-stats/${ctx.from.id}`, {
             timeout: 10000
         });
 
         const stats = response.data || { total_calls: 0, total_sms: 0, recent_activity: [] };
         
-        await ctx.answerWebAppQuery(JSON.stringify({
-            success: true,
-            stats: stats
-        }));
+        // Format stats message
+        let statsMsg = `📊 *Your Statistics*\n\n`;
+        statsMsg += `📞 Total Calls: ${stats.total_calls || 0}\n`;
+        statsMsg += `💬 Total SMS: ${stats.total_sms || 0}\n`;
+        statsMsg += `📈 This Month: ${stats.this_month_calls || 0} calls, ${stats.this_month_sms || 0} SMS\n`;
+        statsMsg += `✅ Success Rate: ${stats.success_rate || 0}%\n`;
+        
+        if (stats.last_activity) {
+            statsMsg += `🕐 Last Activity: ${formatTimeAgo(stats.last_activity)}\n`;
+        }
+        
+        await ctx.reply(statsMsg, { parse_mode: 'Markdown' });
 
     } catch (error) {
         console.error('Mini App stats error:', error);
-        // Return default stats if API fails
-        await ctx.answerWebAppQuery(JSON.stringify({
-            success: true,
-            stats: { total_calls: 0, total_sms: 0, recent_activity: [] }
-        }));
+        await ctx.reply('📊 Statistics: 0 calls, 0 SMS (Unable to load detailed stats)');
     }
 }
 
@@ -256,33 +256,39 @@ async function handleMiniAppActivity(ctx, user) {
     try {
         const axios = require('axios');
         
-        // Get recent calls
-        const callsResponse = await axios.get(`${config.apiUrl}/api/calls/list?limit=5&user_id=${ctx.from.id}`, {
+        // Get recent calls and activity
+        const response = await axios.get(`${config.apiUrl}/api/calls/list?limit=5&user_id=${ctx.from.id}`, {
             timeout: 10000
         });
 
-        const calls = callsResponse.data.calls || [];
+        const calls = response.data.calls || [];
         
-        // Format activity for Mini App
-        const activity = calls.map(call => ({
-            type: 'call',
-            title: `Voice Call to ${call.phone_number}`,
-            subtitle: `Duration: ${formatDuration(call.duration)} • ${call.status}`,
-            time: formatTimeAgo(call.created_at),
-            call_sid: call.call_sid
-        }));
+        if (calls.length === 0) {
+            await ctx.reply('📋 No recent activity found.');
+            return;
+        }
+        
+        // Format activity message
+        let activityMsg = `📋 *Recent Activity*\n\n`;
+        
+        calls.forEach((call, index) => {
+            const status = call.status === 'completed' ? '✅' : 
+                          call.status === 'failed' ? '❌' : 
+                          call.status === 'busy' ? '📵' : '⏳';
+            
+            activityMsg += `${index + 1}. ${status} Call to ${call.phone_number}\n`;
+            activityMsg += `   Duration: ${formatDuration(call.duration)} • ${formatTimeAgo(call.created_at)}\n`;
+            if (call.call_sid) {
+                activityMsg += `   SID: \`${call.call_sid.substring(0, 20)}...\`\n`;
+            }
+            activityMsg += `\n`;
+        });
 
-        await ctx.answerWebAppQuery(JSON.stringify({
-            success: true,
-            activity: activity
-        }));
+        await ctx.reply(activityMsg, { parse_mode: 'Markdown' });
 
     } catch (error) {
         console.error('Mini App activity error:', error);
-        await ctx.answerWebAppQuery(JSON.stringify({
-            success: true,
-            activity: []
-        }));
+        await ctx.reply('📋 Unable to load recent activity. Use /calls to see call history.');
     }
 }
 
@@ -295,17 +301,27 @@ function formatDuration(seconds) {
 }
 
 function formatTimeAgo(dateString) {
-    const date = new Date(dateString);
-    const now = new Date();
-    const diffMs = now - date;
-    const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
+    if (!dateString) return 'Unknown';
     
-    if (diffHours < 1) return 'Just now';
-    if (diffHours < 24) return `${diffHours}h ago`;
-    return date.toLocaleDateString();
+    try {
+        const date = new Date(dateString);
+        const now = new Date();
+        const diffMs = now - date;
+        const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
+        
+        if (diffHours < 1) return 'Just now';
+        if (diffHours < 24) return `${diffHours}h ago`;
+        if (diffHours < 48) return 'Yesterday';
+        return date.toLocaleDateString();
+    } catch (error) {
+        return 'Unknown';
+    }
 }
 
-// Add Mini App button to existing menus
+// Add Mini App button to existing menus (utility function)
 function addMiniAppButton(keyboard) {
-    return keyboard.row().webApp('🚀 Open Mini App', config.webAppUrl || 'https://your-domain.com/miniapp.html');
+    const webAppUrl = process.env.WEBAPP_URL || config.webAppUrl || 'https://your-vercel-app.vercel.app/miniapp.html';
+    return keyboard.row().webApp('🚀 Open Mini App', webAppUrl);
 }
+
+module.exports.addMiniAppButton = addMiniAppButton;

@@ -1,12 +1,10 @@
 {
   "version": 2,
+  "name": "voicednut-miniapp",
   "builds": [
     {
       "src": "bot/server/webapp.js",
-      "use": "@vercel/node",
-      "config": {
-        "maxLambdaSize": "50mb"
-      }
+      "use": "@vercel/node"
     },
     {
       "src": "bot/public/**",
@@ -16,51 +14,23 @@
   "routes": [
     {
       "src": "/miniapp.html",
-      "dest": "/bot/public/miniapp.html",
-      "headers": {
-        "Cache-Control": "public, max-age=3600",
-        "X-Frame-Options": "ALLOWALL",
-        "Content-Security-Policy": "default-src 'self' 'unsafe-inline' 'unsafe-eval' https://telegram.org https://*.telegram.org https://web.telegram.org https://*.web.telegram.org; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://telegram.org https://*.telegram.org; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; font-src 'self' data: https:; connect-src 'self' https: wss:;"
-      }
-    },
-    {
-      "src": "/api/(.*)",
-      "dest": "/bot/server/webapp.js",
-      "headers": {
-        "Access-Control-Allow-Origin": "*",
-        "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
-        "Access-Control-Allow-Headers": "X-Requested-With, Content-Type, Authorization",
-        "Cache-Control": "no-store, no-cache, must-revalidate"
-      }
-    },
-    {
-      "src": "/(.*\\.(css|js|png|jpg|jpeg|gif|ico|svg|woff|woff2|ttf|eot))",
-      "dest": "/bot/public/$1",
-      "headers": {
-        "Cache-Control": "public, max-age=31536000, immutable"
-      }
-    },
-    {
-      "src": "/app",
       "dest": "/bot/public/miniapp.html"
     },
     {
-      "src": "/mini-app.html",
-      "status": 308,
-      "headers": { "Location": "/miniapp.html" }
-    },
-    {
-      "src": "/webapp.html",
-      "status": 308,
-      "headers": { "Location": "/miniapp.html" }
+      "src": "/api/(.*)",
+      "dest": "/bot/server/webapp.js"
     },
     {
       "src": "/(.*)",
       "dest": "/bot/server/webapp.js"
     }
   ],
+  "functions": {
+    "bot/server/webapp.js": {
+      "maxDuration": 30
+    }
+  },
   "env": {
     "NODE_ENV": "production"
-  },
-  "regions": ["iad1"]
+  }
 }

@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Voice Call Bot</title>
+    <title>Voicednut Bot</title>
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
     <style>
         * {
@@ -16,1349 +16,733 @@
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
             background: var(--tg-theme-bg-color, #ffffff);
             color: var(--tg-theme-text-color, #000000);
-            overflow-x: hidden;
-            padding: 0;
-            margin: 0;
+            padding: 16px;
+            line-height: 1.4;
         }
 
-        .app-container {
-            max-width: 100vw;
-            min-height: 100vh;
-            background: linear-gradient(135deg, 
-                var(--tg-theme-bg-color, #f8fafc) 0%, 
-                var(--tg-theme-secondary-bg-color, #e2e8f0) 100%);
-            position: relative;
+        .container {
+            max-width: 400px;
+            margin: 0 auto;
         }
 
-        /* Header Styles */
         .header {
-            background: var(--tg-theme-button-color, #0088cc);
-            color: var(--tg-theme-button-text-color, #ffffff);
-            padding: 16px 20px;
-            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
-            position: sticky;
-            top: 0;
-            z-index: 100;
-            display: flex;
-            align-items: center;
-            gap: 12px;
-        }
-
-        .back-btn {
-            background: rgba(255,255,255,0.2);
-            border: none;
-            border-radius: 50%;
-            width: 40px;
-            height: 40px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            color: white;
-            font-size: 18px;
-            cursor: pointer;
-            transition: background 0.2s;
-        }
-
-        .back-btn:hover {
-            background: rgba(255,255,255,0.3);
-        }
-
-        .back-btn.hidden {
-            display: none;
-        }
-
-        .header-content {
-            flex: 1;
-        }
-
-        .header h1 {
-            font-size: 20px;
-            font-weight: 700;
-            margin-bottom: 2px;
-        }
-
-        .header .subtitle {
-            opacity: 0.9;
-            font-size: 13px;
-        }
-
-        /* Page Container */
-        .page {
-            display: none;
-            min-height: calc(100vh - 80px);
-            padding: 20px;
-            animation: slideIn 0.3s ease;
-        }
-
-        .page.active {
-            display: block;
-        }
-
-        @keyframes slideIn {
-            from {
-                opacity: 0;
-                transform: translateX(20px);
-            }
-            to {
-                opacity: 1;
-                transform: translateX(0);
-            }
-        }
-
-        /* Home Page Styles */
-        .welcome-card {
-            background: linear-gradient(135deg, var(--tg-theme-button-color, #0088cc), #00a8ff);
-            color: white;
-            padding: 30px 20px;
-            border-radius: 20px;
-            margin-bottom: 30px;
             text-align: center;
-            box-shadow: 0 8px 25px rgba(0,136,204,0.3);
+            margin-bottom: 24px;
+            padding: 16px;
+            background: var(--tg-theme-secondary-bg-color, #f8f8f8);
+            border-radius: 12px;
         }
 
-        .welcome-card h2 {
+        .user-info {
+            margin-bottom: 16px;
+            padding: 12px;
+            background: var(--tg-theme-section-bg-color, #f0f0f0);
+            border-radius: 8px;
+            font-size: 14px;
+        }
+
+        .stats-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 12px;
+            margin-bottom: 24px;
+        }
+
+        .stat-card {
+            background: var(--tg-theme-section-bg-color, #f0f0f0);
+            padding: 16px;
+            border-radius: 12px;
+            text-align: center;
+        }
+
+        .stat-number {
             font-size: 24px;
-            font-weight: 700;
+            font-weight: bold;
+            color: var(--tg-theme-link-color, #007AFF);
+        }
+
+        .stat-label {
+            font-size: 12px;
+            opacity: 0.7;
+            margin-top: 4px;
+        }
+
+        .section {
+            margin-bottom: 24px;
+        }
+
+        .section-title {
+            font-size: 18px;
+            font-weight: 600;
+            margin-bottom: 12px;
+            color: var(--tg-theme-text-color, #000000);
+        }
+
+        .form-group {
+            margin-bottom: 16px;
+        }
+
+        .form-label {
+            display: block;
+            margin-bottom: 6px;
+            font-weight: 500;
+            font-size: 14px;
+        }
+
+        .form-input {
+            width: 100%;
+            padding: 12px;
+            border: 1px solid var(--tg-theme-section-separator-color, #d0d0d0);
+            border-radius: 8px;
+            font-size: 16px;
+            background: var(--tg-theme-bg-color, #ffffff);
+            color: var(--tg-theme-text-color, #000000);
+        }
+
+        .form-textarea {
+            width: 100%;
+            padding: 12px;
+            border: 1px solid var(--tg-theme-section-separator-color, #d0d0d0);
+            border-radius: 8px;
+            font-size: 14px;
+            background: var(--tg-theme-bg-color, #ffffff);
+            color: var(--tg-theme-text-color, #000000);
+            resize: vertical;
+            min-height: 80px;
+        }
+
+        .btn {
+            width: 100%;
+            padding: 14px;
+            border: none;
+            border-radius: 8px;
+            font-size: 16px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: opacity 0.2s;
             margin-bottom: 8px;
         }
 
-        .welcome-card p {
-            opacity: 0.9;
-            line-height: 1.5;
+        .btn-primary {
+            background: var(--tg-theme-button-color, #007AFF);
+            color: var(--tg-theme-button-text-color, #ffffff);
         }
 
-        .user-info-card {
-            background: var(--tg-theme-bg-color, white);
-            border-radius: 16px;
-            padding: 20px;
-            margin-bottom: 30px;
-            box-shadow: 0 2px 12px rgba(0,0,0,0.08);
-            display: flex;
-            align-items: center;
-            gap: 16px;
+        .btn-secondary {
+            background: var(--tg-theme-secondary-bg-color, #f8f8f8);
+            color: var(--tg-theme-text-color, #000000);
         }
 
-        .user-avatar {
-            width: 60px;
-            height: 60px;
-            border-radius: 50%;
-            background: linear-gradient(135deg, var(--tg-theme-button-color, #0088cc), #00a8ff);
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-weight: bold;
-            font-size: 24px;
-            color: white;
-            box-shadow: 0 4px 12px rgba(0,136,204,0.3);
+        .btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
         }
 
-        .user-details h3 {
-            font-size: 18px;
-            font-weight: 600;
+        .btn:hover:not(:disabled) {
+            opacity: 0.8;
+        }
+
+        .activity-item {
+            padding: 12px;
+            background: var(--tg-theme-section-bg-color, #f0f0f0);
+            border-radius: 8px;
+            margin-bottom: 8px;
+        }
+
+        .activity-title {
+            font-weight: 500;
+            font-size: 14px;
             margin-bottom: 4px;
         }
 
-        .user-status {
-            font-size: 14px;
+        .activity-subtitle {
+            font-size: 12px;
             opacity: 0.7;
+            margin-bottom: 2px;
+        }
+
+        .activity-time {
+            font-size: 11px;
+            opacity: 0.5;
+        }
+
+        .loading {
+            text-align: center;
+            padding: 20px;
+            opacity: 0.7;
+        }
+
+        .error {
+            color: #ff3b30;
+            background: #ffebee;
+            padding: 12px;
+            border-radius: 8px;
+            margin: 8px 0;
+            font-size: 14px;
+        }
+
+        .success {
+            color: #28a745;
+            background: #d4edda;
+            padding: 12px;
+            border-radius: 8px;
+            margin: 8px 0;
+            font-size: 14px;
+        }
+
+        .tabs {
             display: flex;
-            align-items: center;
-            gap: 8px;
+            background: var(--tg-theme-section-bg-color, #f0f0f0);
+            border-radius: 8px;
+            margin-bottom: 16px;
+        }
+
+        .tab {
+            flex: 1;
+            padding: 12px;
+            text-align: center;
+            cursor: pointer;
+            border-radius: 8px;
+            transition: all 0.2s;
+        }
+
+        .tab.active {
+            background: var(--tg-theme-button-color, #007AFF);
+            color: var(--tg-theme-button-text-color, #ffffff);
+        }
+
+        .tab-content {
+            display: none;
+        }
+
+        .tab-content.active {
+            display: block;
+        }
+
+        .admin-badge {
+            background: #ff9500;
+            color: white;
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-size: 10px;
+            font-weight: bold;
+            text-transform: uppercase;
         }
 
         .status-indicator {
             width: 8px;
             height: 8px;
             border-radius: 50%;
-            background: #10b981;
-        }
-
-        /* Menu Grid */
-        .menu-grid {
-            display: grid;
-            grid-template-columns: repeat(2, 1fr);
-            gap: 16px;
-            margin-bottom: 30px;
-        }
-
-        .menu-card {
-            background: var(--tg-theme-bg-color, white);
-            border-radius: 20px;
-            padding: 24px;
-            text-align: center;
-            cursor: pointer;
-            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-            box-shadow: 0 4px 12px rgba(0,0,0,0.08);
-            border: 2px solid transparent;
-            position: relative;
-            overflow: hidden;
-        }
-
-        .menu-card::before {
-            content: '';
-            position: absolute;
-            top: 0;
-            left: 0;
-            right: 0;
-            bottom: 0;
-            background: linear-gradient(135deg, var(--tg-theme-button-color, #0088cc), #00a8ff);
-            opacity: 0;
-            transition: opacity 0.3s ease;
-        }
-
-        .menu-card:hover::before {
-            opacity: 0.05;
-        }
-
-        .menu-card:active {
-            transform: scale(0.98);
-        }
-
-        .menu-card .icon {
-            font-size: 40px;
-            margin-bottom: 12px;
-            display: block;
-            position: relative;
-            z-index: 1;
-        }
-
-        .menu-card .title {
-            font-size: 16px;
-            font-weight: 600;
-            margin-bottom: 4px;
-            position: relative;
-            z-index: 1;
-        }
-
-        .menu-card .description {
-            font-size: 13px;
-            opacity: 0.7;
-            line-height: 1.4;
-            position: relative;
-            z-index: 1;
-        }
-
-        /* Stats Overview */
-        .stats-section {
-            margin-bottom: 30px;
-        }
-
-        .section-title {
-            font-size: 18px;
-            font-weight: 600;
-            margin-bottom: 16px;
-            color: var(--tg-theme-text-color, #000);
-            display: flex;
-            align-items: center;
-            gap: 8px;
-        }
-
-        .stats-grid {
-            display: grid;
-            grid-template-columns: repeat(2, 1fr);
-            gap: 12px;
-        }
-
-        .stat-card {
-            background: var(--tg-theme-bg-color, white);
-            padding: 20px;
-            border-radius: 16px;
-            text-align: center;
-            box-shadow: 0 2px 8px rgba(0,0,0,0.08);
-        }
-
-        .stat-value {
-            font-size: 28px;
-            font-weight: 700;
-            color: var(--tg-theme-button-color, #0088cc);
-            margin-bottom: 6px;
-        }
-
-        .stat-label {
-            font-size: 12px;
-            color: var(--tg-theme-hint-color, #64748b);
-            text-transform: uppercase;
-            letter-spacing: 0.5px;
-        }
-
-        /* Form Styles */
-        .form-container {
-            background: var(--tg-theme-bg-color, white);
-            border-radius: 20px;
-            padding: 24px;
-            box-shadow: 0 4px 20px rgba(0,0,0,0.08);
-        }
-
-        .form-group {
-            margin-bottom: 24px;
-        }
-
-        .form-label {
-            display: block;
-            font-size: 14px;
-            font-weight: 600;
-            margin-bottom: 8px;
-            color: var(--tg-theme-text-color, #000);
-        }
-
-        .form-input, .form-textarea {
-            width: 100%;
-            padding: 16px;
-            border: 2px solid var(--tg-theme-hint-color, #e2e8f0);
-            border-radius: 12px;
-            font-size: 16px;
-            background: var(--tg-theme-bg-color, white);
-            color: var(--tg-theme-text-color, #000);
-            transition: all 0.2s ease;
-            font-family: inherit;
-        }
-
-        .form-textarea {
-            min-height: 100px;
-            resize: vertical;
-        }
-
-        .form-input:focus, .form-textarea:focus {
-            outline: none;
-            border-color: var(--tg-theme-button-color, #0088cc);
-            box-shadow: 0 0 0 3px rgba(0, 136, 204, 0.1);
-        }
-
-        .form-hint {
-            font-size: 12px;
-            color: var(--tg-theme-hint-color, #64748b);
-            margin-top: 6px;
-            display: block;
-        }
-
-        .character-counter {
-            text-align: right;
-            font-size: 12px;
-            color: var(--tg-theme-hint-color, #64748b);
-            margin-top: 6px;
-        }
-
-        /* Button Styles */
-        .btn {
-            background: var(--tg-theme-button-color, #0088cc);
-            color: var(--tg-theme-button-text-color, white);
-            border: none;
-            padding: 16px 24px;
-            border-radius: 12px;
-            font-size: 16px;
-            font-weight: 600;
-            cursor: pointer;
-            transition: all 0.2s ease;
-            width: 100%;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            gap: 8px;
-            position: relative;
-            overflow: hidden;
-        }
-
-        .btn:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 8px 20px rgba(0, 136, 204, 0.3);
-        }
-
-        .btn:active {
-            transform: translateY(0);
-        }
-
-        .btn:disabled {
-            opacity: 0.6;
-            cursor: not-allowed;
-            transform: none;
-            box-shadow: none;
-        }
-
-        .btn-secondary {
-            background: var(--tg-theme-secondary-bg-color, #f1f5f9);
-            color: var(--tg-theme-text-color, #000);
-        }
-
-        .loading {
             display: inline-block;
-            width: 20px;
-            height: 20px;
-            border: 2px solid rgba(255,255,255,0.3);
-            border-radius: 50%;
-            border-top-color: currentColor;
-            animation: spin 1s linear infinite;
+            margin-right: 6px;
         }
 
-        @keyframes spin {
-            to { transform: rotate(360deg); }
+        .status-online {
+            background: #34c759;
         }
 
-        /* Activity List */
-        .activity-list {
-            background: var(--tg-theme-bg-color, white);
-            border-radius: 16px;
-            overflow: hidden;
-            box-shadow: 0 2px 12px rgba(0,0,0,0.08);
-        }
-
-        .activity-item {
-            padding: 16px 20px;
-            border-bottom: 1px solid var(--tg-theme-hint-color, #e2e8f0);
-            display: flex;
-            align-items: center;
-            gap: 12px;
-            transition: background 0.2s ease;
-        }
-
-        .activity-item:hover {
-            background: var(--tg-theme-secondary-bg-color, #f8fafc);
-        }
-
-        .activity-item:last-child {
-            border-bottom: none;
-        }
-
-        .activity-icon {
-            width: 40px;
-            height: 40px;
-            border-radius: 10px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 18px;
-            color: white;
-        }
-
-        .activity-icon.call {
-            background: linear-gradient(135deg, #10b981, #059669);
-        }
-
-        .activity-icon.sms {
-            background: linear-gradient(135deg, #8b5cf6, #7c3aed);
-        }
-
-        .activity-content {
-            flex: 1;
-        }
-
-        .activity-title {
-            font-size: 14px;
-            font-weight: 600;
-            margin-bottom: 2px;
-        }
-
-        .activity-subtitle {
-            font-size: 13px;
-            color: var(--tg-theme-hint-color, #64748b);
-        }
-
-        .activity-time {
-            font-size: 12px;
-            color: var(--tg-theme-hint-color, #94a3b8);
-        }
-
-        /* Success/Error States */
-        .success-state, .error-state {
-            text-align: center;
-            padding: 40px 20px;
-        }
-
-        .success-state .icon, .error-state .icon {
-            font-size: 64px;
-            margin-bottom: 20px;
-            display: block;
-        }
-
-        .success-state .icon {
-            color: #10b981;
-        }
-
-        .error-state .icon {
-            color: #ef4444;
-        }
-
-        .success-state h3, .error-state h3 {
-            font-size: 20px;
-            font-weight: 600;
-            margin-bottom: 8px;
-        }
-
-        .success-state p, .error-state p {
-            color: var(--tg-theme-hint-color, #64748b);
-            line-height: 1.5;
-        }
-
-        /* Notification */
-        .notification {
-            position: fixed;
-            top: 20px;
-            left: 20px;
-            right: 20px;
-            background: var(--tg-theme-button-color, #0088cc);
-            color: white;
-            padding: 16px 20px;
-            border-radius: 12px;
-            box-shadow: 0 4px 20px rgba(0,0,0,0.2);
-            transform: translateY(-100px);
-            transition: transform 0.3s ease;
-            z-index: 2000;
-            display: flex;
-            align-items: center;
-            gap: 12px;
-        }
-
-        .notification.show {
-            transform: translateY(0);
-        }
-
-        .notification.success {
-            background: #10b981;
-        }
-
-        .notification.error {
-            background: #ef4444;
-        }
-
-        /* Empty State */
-        .empty-state {
-            text-align: center;
-            padding: 60px 20px;
-            color: var(--tg-theme-hint-color, #64748b);
-        }
-
-        .empty-state .icon {
-            font-size: 48px;
-            margin-bottom: 16px;
-            opacity: 0.5;
-        }
-
-        .empty-state h3 {
-            font-size: 18px;
-            font-weight: 600;
-            margin-bottom: 8px;
-        }
-
-        .empty-state p {
-            font-size: 14px;
-            line-height: 1.5;
-        }
-
-        /* Responsive Design */
-        @media (max-width: 480px) {
-            .menu-grid {
-                grid-template-columns: 1fr;
-                gap: 12px;
-            }
-            
-            .stats-grid {
-                grid-template-columns: 1fr;
-            }
-            
-            .page {
-                padding: 16px;
-            }
-            
-            .form-container {
-                padding: 20px;
-            }
-        }
-
-        /* Loading State */
-        .page-loading {
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            min-height: 200px;
-            flex-direction: column;
-            gap: 16px;
-        }
-
-        .page-loading .spinner {
-            width: 32px;
-            height: 32px;
-            border: 3px solid var(--tg-theme-hint-color, #e2e8f0);
-            border-radius: 50%;
-            border-top-color: var(--tg-theme-button-color, #0088cc);
-            animation: spin 1s linear infinite;
+        .status-offline {
+            background: #ff3b30;
         }
     </style>
 </head>
 <body>
-    <div class="app-container">
+    <div class="container">
         <!-- Header -->
         <div class="header">
-            <button class="back-btn hidden" id="backBtn" onclick="goBack()">←</button>
-            <div class="header-content">
-                <h1 id="headerTitle">Voicednut Bot</h1>
-                <div class="subtitle" id="headerSubtitle">Voice Call & SMS Interface</div>
+            <h1>🎙️ Voicednut Bot</h1>
+            <div id="userInfo" class="user-info">
+                <div class="loading">Loading user info...</div>
             </div>
         </div>
 
-        <!-- Home Page -->
-        <div class="page active" id="homePage">
-            <!-- Welcome Card -->
-            <div class="welcome-card">
-                <h2>Welcome Back! 👋</h2>
-                <p>Ready to make calls and send messages with AI power</p>
+        <!-- Stats -->
+        <div class="stats-grid">
+            <div class="stat-card">
+                <div id="totalCalls" class="stat-number">-</div>
+                <div class="stat-label">Total Calls</div>
             </div>
-
-            <!-- User Info -->
-            <div class="user-info-card">
-                <div class="user-avatar" id="userAvatar">G</div>
-                <div class="user-details">
-                    <h3 id="userName">Guest User</h3>
-                    <div class="user-status">
-                        <span class="status-indicator" id="statusIndicator"></span>
-                        <span id="userStatus">Connecting...</span>
-                    </div>
-                </div>
+            <div class="stat-card">
+                <div id="totalSms" class="stat-number">-</div>
+                <div class="stat-label">Total SMS</div>
             </div>
+        </div>
 
-            <!-- Quick Actions Menu -->
-            <div class="menu-grid">
-                <div class="menu-card" onclick="navigateTo('callPage')">
-                    <span class="icon">📞</span>
-                    <div class="title">Voice Call</div>
-                    <div class="description">Start AI-powered voice calls</div>
-                </div>
+        <!-- Tabs -->
+        <div class="tabs">
+            <div class="tab active" data-tab="call">📞 Call</div>
+            <div class="tab" data-tab="sms">💬 SMS</div>
+            <div class="tab" data-tab="activity">📋 Activity</div>
+        </div>
 
-                <div class="menu-card" onclick="navigateTo('smsPage')">
-                    <span class="icon">💬</span>
-                    <div class="title">Send SMS</div>
-                    <div class="description">Send text messages instantly</div>
-                </div>
-
-                <div class="menu-card" onclick="navigateTo('activityPage')">
-                    <span class="icon">📋</span>
-                    <div class="title">Activity</div>
-                    <div class="description">View call and SMS history</div>
-                </div>
-
-                <div class="menu-card" onclick="navigateTo('settingsPage')">
-                    <span class="icon">⚙️</span>
-                    <div class="title">Settings</div>
-                    <div class="description">App preferences & tools</div>
-                </div>
-            </div>
-
-            <!-- Stats Overview -->
-            <div class="stats-section">
-                <div class="section-title">📊 Quick Stats</div>
-                <div class="stats-grid">
-                    <div class="stat-card">
-                        <div class="stat-value" id="totalCalls">0</div>
-                        <div class="stat-label">Total Calls</div>
+        <!-- Call Tab -->
+        <div id="callTab" class="tab-content active">
+            <div class="section">
+                <h2 class="section-title">Voice Call</h2>
+                <div id="callForm">
+                    <div class="form-group">
+                        <label class="form-label">Phone Number</label>
+                        <input type="tel" id="callPhone" class="form-input" placeholder="+1234567890" required>
                     </div>
-                    <div class="stat-card">
-                        <div class="stat-value" id="totalSms">0</div>
-                        <div class="stat-label">Messages Sent</div>
+                    <div class="form-group">
+                        <label class="form-label">AI Agent Behavior</label>
+                        <textarea id="callPrompt" class="form-textarea" placeholder="Describe how the AI should behave during the call..." required></textarea>
                     </div>
+                    <div class="form-group">
+                        <label class="form-label">First Message</label>
+                        <textarea id="callMessage" class="form-textarea" placeholder="What the AI should say first..." required></textarea>
+                    </div>
+                    <button id="callButton" class="btn btn-primary">📞 Make Call</button>
                 </div>
             </div>
         </div>
 
-        <!-- Voice Call Page -->
-        <div class="page" id="callPage">
-            <div class="form-container">
-                <div class="section-title">📞 New Voice Call</div>
-                
-                <form id="callForm">
+        <!-- SMS Tab -->
+        <div id="smsTab" class="tab-content">
+            <div class="section">
+                <h2 class="section-title">Send SMS</h2>
+                <div id="smsForm">
                     <div class="form-group">
-                        <label class="form-label">Phone Number *</label>
-                        <input type="tel" class="form-input" id="callPhone" placeholder="+1234567890" required>
-                        <span class="form-hint">Use international format (e.g., +1234567890)</span>
+                        <label class="form-label">Phone Number</label>
+                        <input type="tel" id="smsPhone" class="form-input" placeholder="+1234567890" required>
                     </div>
-                    
                     <div class="form-group">
-                        <label class="form-label">AI Agent Instructions *</label>
-                        <textarea class="form-textarea" id="callPrompt" 
-                            placeholder="Describe how the AI should behave during the call. For example: You are a friendly customer service representative helping with product inquiries. Be polite, professional, and helpful." 
-                            required></textarea>
-                        <span class="form-hint">Detailed instructions help the AI perform better</span>
-                    </div>
-                    
-                    <div class="form-group">
-                        <label class="form-label">Opening Message *</label>
-                        <textarea class="form-textarea" id="callMessage" 
-                            placeholder="The first message the AI will speak when the call connects. For example: Hello, this is Sarah calling from ABC Company. I'm reaching out regarding your recent inquiry about our services." 
-                            required></textarea>
-                        <span class="form-hint">This will be the first thing the recipient hears</span>
-                    </div>
-                    
-                    <button type="submit" class="btn" id="callSubmitBtn">
-                        <span id="callButtonText">📞 Start Call</span>
-                        <span id="callLoader" class="loading" style="display: none;"></span>
-                    </button>
-                </form>
-            </div>
-        </div>
-
-        <!-- SMS Page -->
-        <div class="page" id="smsPage">
-            <div class="form-container">
-                <div class="section-title">💬 Send SMS Message</div>
-                
-                <form id="smsForm">
-                    <div class="form-group">
-                        <label class="form-label">Phone Number *</label>
-                        <input type="tel" class="form-input" id="smsPhone" placeholder="+1234567890" required>
-                        <span class="form-hint">Use international format (e.g., +1234567890)</span>
-                    </div>
-                    
-                    <div class="form-group">
-                        <label class="form-label">Message *</label>
-                        <textarea class="form-textarea" id="smsMessage" 
-                            placeholder="Type your message here..." 
-                            required 
-                            maxlength="1600"></textarea>
-                        <div class="character-counter">
-                            <span id="smsCount">0</span>/1600 characters
+                        <label class="form-label">Message</label>
+                        <textarea id="smsMessage" class="form-textarea" placeholder="Your SMS message..." required maxlength="1600"></textarea>
+                        <div style="font-size: 12px; opacity: 0.7; margin-top: 4px;">
+                            <span id="smsCharCount">0</span>/1600 characters
                         </div>
                     </div>
-                    
-                    <button type="submit" class="btn" id="smsSubmitBtn">
-                        <span id="smsButtonText">💬 Send Message</span>
-                        <span id="smsLoader" class="loading" style="display: none;"></span>
-                    </button>
-                </form>
-            </div>
-        </div>
-
-        <!-- Activity Page -->
-        <div class="page" id="activityPage">
-            <div class="section-title">📋 Recent Activity</div>
-            <div id="activityContent">
-                <div class="page-loading">
-                    <div class="spinner"></div>
-                    <p>Loading activity...</p>
+                    <button id="smsButton" class="btn btn-primary">📱 Send SMS</button>
                 </div>
             </div>
         </div>
 
-        <!-- Settings Page -->
-        <div class="page" id="settingsPage">
-            <div class="section-title">⚙️ Settings & Tools</div>
-            
-            <div class="menu-grid">
-                <div class="menu-card" onclick="showHealth()">
-                    <span class="icon">🏥</span>
-                    <div class="title">System Health</div>
-                    <div class="description">Check system status</div>
-                </div>
-
-                <div class="menu-card" onclick="showGuide()">
-                    <span class="icon">📚</span>
-                    <div class="title">User Guide</div>
-                    <div class="description">How to use the app</div>
-                </div>
-
-                <div class="menu-card" id="adminCard" style="display: none;" onclick="navigateTo('adminPage')">
-                    <span class="icon">🛡️</span>
-                    <div class="title">Admin Tools</div>
-                    <div class="description">Advanced features</div>
-                </div>
-
-                <div class="menu-card" onclick="showAbout()">
-                    <span class="icon">ℹ️</span>
-                    <div class="title">About</div>
-                    <div class="description">App information</div>
+        <!-- Activity Tab -->
+        <div id="activityTab" class="tab-content">
+            <div class="section">
+                <h2 class="section-title">Recent Activity</h2>
+                <div id="activityList">
+                    <div class="loading">Loading activity...</div>
                 </div>
             </div>
         </div>
 
-        <!-- Admin Page -->
-        <div class="page" id="adminPage">
-            <div class="section-title">🛡️ Administrator Tools</div>
-            
-            <div class="menu-grid">
-                <div class="menu-card" onclick="showUsers()">
-                    <span class="icon">👥</span>
-                    <div class="title">Manage Users</div>
-                    <div class="description">Add or remove users</div>
-                </div>
-
-                <div class="menu-card" onclick="showAnalytics()">
-                    <span class="icon">📈</span>
-                    <div class="title">Analytics</div>
-                    <div class="description">Detailed usage statistics</div>
-                </div>
-
-                <div class="menu-card" onclick="showLogs()">
-                    <span class="icon">📄</span>
-                    <div class="title">System Logs</div>
-                    <div class="description">View system logs</div>
-                </div>
-
-                <div class="menu-card" onclick="showBilling()">
-                    <span class="icon">💳</span>
-                    <div class="title">Billing</div>
-                    <div class="description">Usage and costs</div>
-                </div>
-            </div>
-        </div>
-
-        <!-- Success Page -->
-        <div class="page" id="successPage">
-            <div id="successContent"></div>
-        </div>
-
-        <!-- Error Page -->
-        <div class="page" id="errorPage">
-            <div id="errorContent"></div>
-        </div>
-    </div>
-
-    <!-- Notification -->
-    <div class="notification" id="notification">
-        <span id="notificationText"></span>
+        <!-- Status Messages -->
+        <div id="statusContainer"></div>
     </div>
 
     <script>
         // Initialize Telegram Web App
-        const tg = window.Telegram?.WebApp;
-        
-        // Navigation state
-        let currentPage = 'homePage';
-        let pageHistory = [];
-        
-        // User data
-        let userData = {
-            id: tg?.initDataUnsafe?.user?.id || 'demo',
-            username: tg?.initDataUnsafe?.user?.username || 'demo_user',
-            first_name: tg?.initDataUnsafe?.user?.first_name || 'Demo',
-            last_name: tg?.initDataUnsafe?.user?.last_name || 'User',
-            role: 'USER'
-        };
+        let tg = window.Telegram.WebApp;
+        let initData = tg.initData || 'demo';
+        let user = null;
+
+        // Get base URL from current location
+        const BASE_URL = window.location.origin;
+        console.log('Base URL:', BASE_URL);
+
+        // Telegram Web App setup
+        tg.expand();
+        tg.ready();
+
+        // Global state
+        let userData = null;
+        let userStats = null;
 
         // Initialize app
-        if (!tg) {
-            console.error('Telegram WebApp not available');
-            document.body.innerHTML = '<div style="padding: 20px; color: red;">This app must be opened from Telegram.</div>';
-        } else {
-            tg.ready();
-            tg.expand();
-            document.addEventListener('DOMContentLoaded', initApp);
-        }
+        document.addEventListener('DOMContentLoaded', function() {
+            setupTabs();
+            setupFormHandlers();
+            loadUserData();
+            loadStats();
+            loadActivity();
+        });
 
-        // Page navigation functions
-        function navigateTo(pageId) {
-            // Hide current page
-            document.querySelectorAll('.page').forEach(page => page.classList.remove('active'));
-            
-            // Add current page to history if not going back
-            if (currentPage !== pageId) {
-                pageHistory.push(currentPage);
-            }
-            
-            // Show new page
-            document.getElementById(pageId).classList.add('active');
-            currentPage = pageId;
-            
-            // Update header
-            updateHeader(pageId);
-            
-            // Load page-specific content
-            loadPageContent(pageId);
-            
-            // Update back button
-            updateBackButton();
-        }
+        // Tab functionality
+        function setupTabs() {
+            const tabs = document.querySelectorAll('.tab');
+            const contents = document.querySelectorAll('.tab-content');
 
-        function goBack() {
-            if (pageHistory.length > 0) {
-                const previousPage = pageHistory.pop();
-                document.querySelectorAll('.page').forEach(page => page.classList.remove('active'));
-                document.getElementById(previousPage).classList.add('active');
-                currentPage = previousPage;
-                updateHeader(previousPage);
-                updateBackButton();
-            } else {
-                navigateTo('homePage');
-            }
-        }
+            tabs.forEach(tab => {
+                tab.addEventListener('click', () => {
+                    const tabName = tab.dataset.tab;
+                    
+                    // Update active tab
+                    tabs.forEach(t => t.classList.remove('active'));
+                    contents.forEach(c => c.classList.remove('active'));
+                    
+                    tab.classList.add('active');
+                    document.getElementById(tabName + 'Tab').classList.add('active');
 
-        function updateHeader(pageId) {
-            const headerTitle = document.getElementById('headerTitle');
-            const headerSubtitle = document.getElementById('headerSubtitle');
-            
-            const pageInfo = {
-                homePage: { title: 'Voicednut Bot', subtitle: 'Voice Call & SMS Interface' },
-                callPage: { title: 'Voice Call', subtitle: 'Start a new AI voice call' },
-                smsPage: { title: 'Send SMS', subtitle: 'Send a text message' },
-                activityPage: { title: 'Activity', subtitle: 'Recent calls and messages' },
-                settingsPage: { title: 'Settings', subtitle: 'App preferences and tools' },
-                adminPage: { title: 'Admin Tools', subtitle: 'Administrator features' },
-                successPage: { title: 'Success', subtitle: 'Operation completed' },
-                errorPage: { title: 'Error', subtitle: 'Something went wrong' }
-            };
-            
-            const info = pageInfo[pageId] || pageInfo.homePage;
-            headerTitle.textContent = info.title;
-            headerSubtitle.textContent = info.subtitle;
-        }
-
-        function updateBackButton() {
-            const backBtn = document.getElementById('backBtn');
-            if (currentPage === 'homePage') {
-                backBtn.classList.add('hidden');
-            } else {
-                backBtn.classList.remove('hidden');
-            }
-        }
-
-        function loadPageContent(pageId) {
-            switch(pageId) {
-                case 'activityPage':
-                    loadActivity();
-                    break;
-                case 'homePage':
-                    loadRecentActivity();
-                    break;
-            }
-        }
-
-        // Initialize app
-        async function initApp() {
-            try {
-                console.log('Initializing Multi-Page Mini App...');
-                
-                // Validate WebApp data
-                const isValid = await validateWebAppData();
-                if (!isValid && tg?.initData) {
-                    showNotification('Authentication failed. Using demo mode.', 'error');
-                }
-                
-                // Update user information
-                await loadUserData();
-                updateUserInfo();
-                
-                // Load stats
-                await loadRecentActivity();
-                
-                // Setup form handlers
-                setupFormHandlers();
-                
-                // Setup message counter
-                setupMessageCounter();
-                
-                // Set Telegram buttons
-                if (tg?.MainButton) {
-                    tg.MainButton.hide();
-                }
-                
-                // Update status
-                document.getElementById('userStatus').textContent = 'Online';
-                document.getElementById('statusIndicator').style.background = '#10b981';
-                
-                showNotification('Welcome to Voicednut Bot! 🚀', 'success');
-                
-            } catch (error) {
-                console.error('App initialization error:', error);
-                showNotification('Initialization error: ' + error.message, 'error');
-            }
-        }
-
-        // Validate WebApp data
-        async function validateWebAppData() {
-            try {
-                if (!tg?.initData) {
-                    console.log('No initData available, using demo mode');
-                    return true;
-                }
-
-                const response = await fetch('/api/validate-webapp-data', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ initData: tg.initData })
+                    // Load data when switching to activity tab
+                    if (tabName === 'activity') {
+                        loadActivity();
+                    }
                 });
-                
-                const data = await response.json();
-                return data.valid;
-            } catch (error) {
-                console.error('WebApp validation failed:', error);
-                return true; // Allow fallback
-            }
+            });
+        }
+
+        // Form handlers
+        function setupFormHandlers() {
+            // Call form
+            document.getElementById('callButton').addEventListener('click', handleCall);
+            
+            // SMS form
+            document.getElementById('smsButton').addEventListener('click', handleSMS);
+            
+            // SMS character counter
+            const smsTextarea = document.getElementById('smsMessage');
+            const charCount = document.getElementById('smsCharCount');
+            smsTextarea.addEventListener('input', function() {
+                charCount.textContent = this.value.length;
+            });
         }
 
         // Load user data
         async function loadUserData() {
             try {
-                const response = await fetch(`/api/user/${userData.id}`);
-                if (response.ok) {
-                    const userInfo = await response.json();
-                    userData = { ...userData, ...userInfo };
-                    
-                    // Show admin card if user is admin
-                    if (userData.role === 'ADMIN' || userData.isAdmin) {
-                        document.getElementById('adminCard').style.display = 'block';
+                console.log('Loading user data...');
+                
+                // Extract user info from initData or use demo
+                if (initData && initData !== 'demo') {
+                    const urlParams = new URLSearchParams(initData);
+                    const userParam = urlParams.get('user');
+                    if (userParam) {
+                        try {
+                            user = JSON.parse(decodeURIComponent(userParam));
+                            console.log('User from initData:', user);
+                        } catch (e) {
+                            console.warn('Failed to parse user from initData:', e);
+                        }
                     }
                 }
+
+                // Fallback to demo user
+                if (!user) {
+                    user = {
+                        id: 'demo',
+                        username: 'demo_user',
+                        first_name: 'Demo',
+                        last_name: 'User'
+                    };
+                    console.log('Using demo user:', user);
+                }
+
+                // Load additional user data from API
+                const response = await fetch(`${BASE_URL}/api/user/${user.id}`);
+                if (response.ok) {
+                    userData = await response.json();
+                    console.log('User data from API:', userData);
+                } else {
+                    console.warn('Failed to load user data from API, using initData only');
+                    userData = user;
+                }
+
+                updateUserInfo();
             } catch (error) {
-                console.error('Failed to load user data:', error);
+                console.error('Error loading user data:', error);
+                showError('Failed to load user information');
+                
+                // Use fallback
+                userData = {
+                    id: 'demo',
+                    username: 'demo_user',
+                    first_name: 'Demo',
+                    last_name: 'User',
+                    role: 'USER',
+                    isAdmin: false
+                };
+                updateUserInfo();
             }
         }
 
+        // Update user info display
         function updateUserInfo() {
-            const avatar = document.getElementById('userAvatar');
-            const name = document.getElementById('userName');
-
-            avatar.textContent = userData.first_name ? userData.first_name.charAt(0).toUpperCase() : '👤';
-            name.textContent = `${userData.first_name} ${userData.last_name || ''}`.trim();
-        }
-
-        async function loadRecentActivity() {
-            try {
-                const statsResponse = await fetch(`/api/user-stats/${userData.id}`);
-                if (statsResponse.ok) {
-                    const stats = await statsResponse.json();
-                    document.getElementById('totalCalls').textContent = stats.total_calls || '0';
-                    document.getElementById('totalSms').textContent = stats.total_sms || '0';
-                }
-            } catch (error) {
-                console.error('Failed to load activity:', error);
-                document.getElementById('totalCalls').textContent = '0';
-                document.getElementById('totalSms').textContent = '0';
-            }
-        }
-
-        async function loadActivity() {
-            const activityContent = document.getElementById('activityContent');
+            const userInfoDiv = document.getElementById('userInfo');
+            const fullName = `${userData.first_name || ''} ${userData.last_name || ''}`.trim();
+            const username = userData.username ? `@${userData.username}` : '';
+            const displayName = fullName || username || `User ${userData.id}`;
             
-            try {
-                // Show loading state
-                activityContent.innerHTML = `
-                    <div class="page-loading">
-                        <div class="spinner"></div>
-                        <p>Loading recent activity...</p>
-                    </div>
-                `;
-                
-                const response = await fetch(`/api/user-activity/${userData.id}?limit=20`);
-                
-                if (response.ok) {
-                    const data = await response.json();
-                    const activities = data.activities || [];
-                    
-                    if (activities.length === 0) {
-                        activityContent.innerHTML = `
-                            <div class="empty-state">
-                                <div class="icon">📭</div>
-                                <h3>No Activity Yet</h3>
-                                <p>Your calls and messages will appear here once you start using the bot.</p>
-                            </div>
-                        `;
-                        return;
-                    }
-                    
-                    const activityHtml = activities.map(activity => `
-                        <div class="activity-item">
-                            <div class="activity-icon ${activity.type}">
-                                ${activity.type === 'call' ? '📞' : '💬'}
-                            </div>
-                            <div class="activity-content">
-                                <div class="activity-title">
-                                    ${activity.type === 'call' ? 'Voice Call' : 'SMS'} to ${activity.phone_number}
-                                </div>
-                                <div class="activity-subtitle">
-                                    ${activity.type === 'call' 
-                                        ? `Duration: ${formatDuration(activity.duration)} • ${activity.status}` 
-                                        : `${activity.status} • ${activity.message?.substring(0, 30)}...`}
-                                </div>
-                            </div>
-                            <div class="activity-time">${formatTimeAgo(activity.created_at)}</div>
-                        </div>
-                    `).join('');
-                    
-                    activityContent.innerHTML = `
-                        <div class="activity-list">
-                            ${activityHtml}
-                        </div>
-                    `;
-                } else {
-                    throw new Error('Failed to load activity');
-                }
-                
-            } catch (error) {
-                console.error('Failed to load activity:', error);
-                activityContent.innerHTML = `
-                    <div class="empty-state">
-                        <div class="icon">⚠️</div>
-                        <h3>Unable to Load Activity</h3>
-                        <p>There was an error loading your recent activity. Please try again later.</p>
-                    </div>
-                `;
-            }
-        }
-
-        // Form handlers
-        function setupFormHandlers() {
-            // Call Form
-            document.getElementById('callForm').addEventListener('submit', async (e) => {
-                e.preventDefault();
-                await handleCallSubmission();
-            });
-            
-            // SMS Form
-            document.getElementById('smsForm').addEventListener('submit', async (e) => {
-                e.preventDefault();
-                await handleSmsSubmission();
-            });
-        }
-
-        async function handleCallSubmission() {
-            const submitBtn = document.getElementById('callSubmitBtn');
-            const buttonText = document.getElementById('callButtonText');
-            const loader = document.getElementById('callLoader');
-            
-            try {
-                // Get form values
-                const phone = document.getElementById('callPhone').value.trim();
-                const prompt = document.getElementById('callPrompt').value.trim();
-                const message = document.getElementById('callMessage').value.trim();
-                
-                // Validation
-                if (!phone || !prompt || !message) {
-                    throw new Error('Please fill in all required fields');
-                }
-
-                if (!phone.match(/^\+[1-9]\d{1,14}$/)) {
-                    throw new Error('Invalid phone format. Use international format like +1234567890');
-                }
-
-                if (prompt.length < 10) {
-                    throw new Error('AI instructions must be at least 10 characters long');
-                }
-
-                if (message.length < 5) {
-                    throw new Error('Opening message must be at least 5 characters long');
-                }
-                
-                // Set loading state
-                submitBtn.disabled = true;
-                buttonText.style.display = 'none';
-                loader.style.display = 'inline-block';
-                
-                // Make API call
-                const response = await fetch('/api/outbound-call', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        phone: phone,
-                        prompt: prompt,
-                        first_message: message,
-                        initData: tg?.initData || 'demo'
-                    })
-                });
-                
-                const data = await response.json();
-                
-                if (data.success) {
-                    // Show success page
-                    showSuccessPage('call', {
-                        phone: phone,
-                        callSid: data.call_sid,
-                        status: data.status,
-                        cost: data.estimated_cost
-                    });
-                    
-                    // Reset form
-                    document.getElementById('callForm').reset();
-                } else {
-                    throw new Error(data.error || 'Failed to initiate call');
-                }
-                
-            } catch (error) {
-                console.error('Call error:', error);
-                showErrorPage('call', error.message);
-            } finally {
-                // Reset loading state
-                submitBtn.disabled = false;
-                buttonText.style.display = 'inline';
-                loader.style.display = 'none';
-            }
-        }
-
-        async function handleSmsSubmission() {
-            const submitBtn = document.getElementById('smsSubmitBtn');
-            const buttonText = document.getElementById('smsButtonText');
-            const loader = document.getElementById('smsLoader');
-            
-            try {
-                // Get form values
-                const phone = document.getElementById('smsPhone').value.trim();
-                const message = document.getElementById('smsMessage').value.trim();
-                
-                // Validation
-                if (!phone || !message) {
-                    throw new Error('Please fill in all required fields');
-                }
-
-                if (!phone.startsWith('+') || phone.length < 10) {
-                    throw new Error('Invalid phone format. Use international format like +1234567890');
-                }
-
-                if (message.length < 1) {
-                    throw new Error('Message cannot be empty');
-                }
-
-                if (message.length > 1600) {
-                    throw new Error('Message is too long (max 1600 characters)');
-                }
-                
-                // Set loading state
-                submitBtn.disabled = true;
-                buttonText.style.display = 'none';
-                loader.style.display = 'inline-block';
-                
-                // Make API call
-                const response = await fetch('/api/send-sms', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        phone: phone,
-                        message: message,
-                        initData: tg?.initData || 'demo'
-                    })
-                });
-                
-                const data = await response.json();
-                
-                if (data.success) {
-                    // Show success page
-                    showSuccessPage('sms', {
-                        phone: phone,
-                        messageSid: data.message_sid,
-                        status: data.status,
-                        segments: data.segments,
-                        cost: data.estimated_cost
-                    });
-                    
-                    // Reset form
-                    document.getElementById('smsForm').reset();
-                    updateSmsCount();
-                } else {
-                    throw new Error(data.error || 'Failed to send SMS');
-                }
-                
-            } catch (error) {
-                console.error('SMS error:', error);
-                showErrorPage('sms', error.message);
-            } finally {
-                // Reset loading state
-                submitBtn.disabled = false;
-                buttonText.style.display = 'inline';
-                loader.style.display = 'none';
-            }
-        }
-
-        function setupMessageCounter() {
-            const textarea = document.getElementById('smsMessage');
-            const counter = document.getElementById('smsCount');
-            
-            textarea.addEventListener('input', updateSmsCount);
-            
-            function updateSmsCount() {
-                counter.textContent = textarea.value.length;
-                
-                // Color coding based on length
-                if (textarea.value.length > 1400) {
-                    counter.style.color = '#ef4444';
-                } else if (textarea.value.length > 1200) {
-                    counter.style.color = '#f59e0b';
-                } else {
-                    counter.style.color = 'var(--tg-theme-hint-color, #64748b)';
-                }
-            }
-            
-            window.updateSmsCount = updateSmsCount;
-        }
-
-        // Success and Error pages
-        function showSuccessPage(type, data) {
-            const successContent = document.getElementById('successContent');
-            
-            let content = '';
-            if (type === 'call') {
-                content = `
-                    <div class="success-state">
-                        <span class="icon">✅</span>
-                        <h3>Call Initiated Successfully!</h3>
-                        <p>Your AI voice call to <strong>${data.phone}</strong> has been started.</p>
-                        <br>
-                        <div style="background: var(--tg-theme-secondary-bg-color, #f8fafc); padding: 16px; border-radius: 12px; text-align: left; margin: 20px 0;">
-                            <div style="margin-bottom: 8px;"><strong>Call ID:</strong> ${data.callSid}</div>
-                            <div style="margin-bottom: 8px;"><strong>Status:</strong> ${data.status}</div>
-                            <div><strong>Estimated Cost:</strong> ${data.cost || 'N/A'}</div>
-                        </div>
-                        <button class="btn" onclick="navigateTo('homePage')" style="margin-top: 20px;">
-                            🏠 Back to Home
-                        </button>
-                    </div>
-                `;
-            } else if (type === 'sms') {
-                content = `
-                    <div class="success-state">
-                        <span class="icon">✅</span>
-                        <h3>Message Sent Successfully!</h3>
-                        <p>Your SMS to <strong>${data.phone}</strong> has been delivered.</p>
-                        <br>
-                        <div style="background: var(--tg-theme-secondary-bg-color, #f8fafc); padding: 16px; border-radius: 12px; text-align: left; margin: 20px 0;">
-                            <div style="margin-bottom: 8px;"><strong>Message ID:</strong> ${data.messageSid}</div>
-                            <div style="margin-bottom: 8px;"><strong>Status:</strong> ${data.status}</div>
-                            <div style="margin-bottom: 8px;"><strong>Segments:</strong> ${data.segments || 1}</div>
-                            <div><strong>Estimated Cost:</strong> ${data.cost || 'N/A'}</div>
-                        </div>
-                        <button class="btn" onclick="navigateTo('homePage')" style="margin-top: 20px;">
-                            🏠 Back to Home
-                        </button>
-                    </div>
-                `;
-            }
-            
-            successContent.innerHTML = content;
-            navigateTo('successPage');
-        }
-
-        function showErrorPage(type, errorMessage) {
-            const errorContent = document.getElementById('errorContent');
-            
-            const actionType = type === 'call' ? 'Voice Call' : 'SMS';
-            
-            errorContent.innerHTML = `
-                <div class="error-state">
-                    <span class="icon">❌</span>
-                    <h3>${actionType} Failed</h3>
-                    <p>${errorMessage}</p>
-                    <div style="display: flex; gap: 12px; margin-top: 30px;">
-                        <button class="btn btn-secondary" onclick="goBack()" style="flex: 1;">
-                            ← Try Again
-                        </button>
-                        <button class="btn" onclick="navigateTo('homePage')" style="flex: 1;">
-                            🏠 Home
-                        </button>
-                    </div>
+            let statusHtml = `
+                <div style="display: flex; align-items: center; justify-content: center; gap: 8px;">
+                    <span class="status-indicator status-online"></span>
+                    <strong>${displayName}</strong>
                 </div>
             `;
             
-            navigateTo('errorPage');
+            if (userData.isAdmin) {
+                statusHtml += `<div style="margin-top: 4px;"><span class="admin-badge">Admin</span></div>`;
+            }
+            
+            statusHtml += `<div style="font-size: 12px; margin-top: 4px; opacity: 0.7;">ID: ${userData.id}</div>`;
+            
+            userInfoDiv.innerHTML = statusHtml;
+        }
+
+        // Load user statistics
+        async function loadStats() {
+            try {
+                console.log('Loading stats for user:', userData?.id || 'demo');
+                
+                const response = await fetch(`${BASE_URL}/api/user-stats/${userData?.id || 'demo'}`);
+                if (response.ok) {
+                    userStats = await response.json();
+                    console.log('User stats:', userStats);
+                    updateStatsDisplay();
+                } else {
+                    throw new Error(`Stats API returned ${response.status}`);
+                }
+            } catch (error) {
+                console.error('Error loading stats:', error);
+                // Show default stats
+                userStats = { total_calls: 0, total_sms: 0 };
+                updateStatsDisplay();
+            }
+        }
+
+        // Update stats display
+        function updateStatsDisplay() {
+            document.getElementById('totalCalls').textContent = userStats.total_calls || 0;
+            document.getElementById('totalSms').textContent = userStats.total_sms || 0;
+        }
+
+        // Load recent activity
+        async function loadActivity() {
+            const activityList = document.getElementById('activityList');
+            
+            try {
+                activityList.innerHTML = '<div class="loading">Loading activity...</div>';
+                
+                console.log('Loading activity for user:', userData?.id || 'demo');
+                
+                const response = await fetch(`${BASE_URL}/api/user-activity/${userData?.id || 'demo'}?limit=10`);
+                if (!response.ok) {
+                    throw new Error(`Activity API returned ${response.status}`);
+                }
+                
+                const data = await response.json();
+                console.log('Activity data:', data);
+                
+                const activities = data.activities || [];
+                
+                if (activities.length === 0) {
+                    activityList.innerHTML = '<div style="text-align: center; opacity: 0.7; padding: 20px;">No recent activity</div>';
+                    return;
+                }
+
+                let activityHtml = '';
+                activities.forEach(activity => {
+                    const icon = activity.type === 'call' ? '📞' : '💬';
+                    const status = activity.status === 'completed' ? '✅' : 
+                                  activity.status === 'failed' ? '❌' : 
+                                  activity.status === 'delivered' ? '✅' : '⏳';
+                    
+                    activityHtml += `
+                        <div class="activity-item">
+                            <div class="activity-title">${icon} ${activity.type === 'call' ? 'Voice Call' : 'SMS'} to ${activity.phone_number}</div>
+                            <div class="activity-subtitle">${status} ${activity.status}${activity.duration ? ` • ${formatDuration(activity.duration)}` : ''}</div>
+                            <div class="activity-time">${formatTimeAgo(activity.created_at)}</div>
+                        </div>
+                    `;
+                });
+                
+                activityList.innerHTML = activityHtml;
+            } catch (error) {
+                console.error('Error loading activity:', error);
+                activityList.innerHTML = '<div class="error">Failed to load recent activity</div>';
+            }
+        }
+
+        // Handle call request
+        async function handleCall() {
+            const button = document.getElementById('callButton');
+            const phone = document.getElementById('callPhone').value.trim();
+            const prompt = document.getElementById('callPrompt').value.trim();
+            const firstMessage = document.getElementById('callMessage').value.trim();
+
+            // Validation
+            if (!phone || !prompt || !firstMessage) {
+                showError('Please fill in all fields');
+                return;
+            }
+
+            if (!isValidPhone(phone)) {
+                showError('Please enter a valid phone number in E.164 format (e.g., +1234567890)');
+                return;
+            }
+
+            if (prompt.length < 10) {
+                showError('AI behavior description must be at least 10 characters');
+                return;
+            }
+
+            if (firstMessage.length < 5) {
+                showError('First message must be at least 5 characters');
+                return;
+            }
+
+            try {
+                button.disabled = true;
+                button.textContent = 'Making Call...';
+                
+                console.log('Making call request:', { phone, prompt: prompt.substring(0, 50) + '...', firstMessage: firstMessage.substring(0, 50) + '...' });
+
+                const response = await fetch(`${BASE_URL}/api/outbound-call`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        phone: phone,
+                        prompt: prompt,
+                        first_message: firstMessage,
+                        initData: initData
+                    })
+                });
+
+                const data = await response.json();
+                console.log('Call response:', data);
+
+                if (response.ok && data.success) {
+                    showSuccess(`Call initiated successfully! Call SID: ${data.call_sid}`);
+                    
+                    // Clear form
+                    document.getElementById('callPhone').value = '';
+                    document.getElementById('callPrompt').value = '';
+                    document.getElementById('callMessage').value = '';
+                    
+                    // Reload stats and activity
+                    setTimeout(() => {
+                        loadStats();
+                        loadActivity();
+                    }, 1000);
+                    
+                    // Send data back to bot
+                    if (tg && tg.sendData) {
+                        tg.sendData(JSON.stringify({
+                            action: 'call',
+                            result: 'success',
+                            call_sid: data.call_sid
+                        }));
+                    }
+                } else {
+                    throw new Error(data.error || 'Call failed');
+                }
+            } catch (error) {
+                console.error('Call error:', error);
+                showError(`Call failed: ${error.message}`);
+            } finally {
+                button.disabled = false;
+                button.textContent = '📞 Make Call';
+            }
+        }
+
+        // Handle SMS request
+        async function handleSMS() {
+            const button = document.getElementById('smsButton');
+            const phone = document.getElementById('smsPhone').value.trim();
+            const message = document.getElementById('smsMessage').value.trim();
+
+            // Validation
+            if (!phone || !message) {
+                showError('Please fill in all fields');
+                return;
+            }
+
+            if (!isValidPhone(phone)) {
+                showError('Please enter a valid phone number (e.g., +1234567890)');
+                return;
+            }
+
+            if (message.length > 1600) {
+                showError('SMS message must be 1600 characters or less');
+                return;
+            }
+
+            try {
+                button.disabled = true;
+                button.textContent = 'Sending SMS...';
+                
+                console.log('Making SMS request:', { phone, messageLength: message.length });
+
+                const response = await fetch(`${BASE_URL}/api/send-sms`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        phone: phone,
+                        message: message,
+                        initData: initData
+                    })
+                });
+
+                const data = await response.json();
+                console.log('SMS response:', data);
+
+                if (response.ok && data.success) {
+                    showSuccess(`SMS sent successfully! Message SID: ${data.message_sid}`);
+                    
+                    // Clear form
+                    document.getElementById('smsPhone').value = '';
+                    document.getElementById('smsMessage').value = '';
+                    document.getElementById('smsCharCount').textContent = '0';
+                    
+                    // Reload stats and activity
+                    setTimeout(() => {
+                        loadStats();
+                        loadActivity();
+                    }, 1000);
+                    
+                    // Send data back to bot
+                    if (tg && tg.sendData) {
+                        tg.sendData(JSON.stringify({
+                            action: 'sms',
+                            result: 'success',
+                            message_sid: data.message_sid
+                        }));
+                    }
+                } else {
+                    throw new Error(data.error || 'SMS failed');
+                }
+            } catch (error) {
+                console.error('SMS error:', error);
+                showError(`SMS failed: ${error.message}`);
+            } finally {
+                button.disabled = false;
+                button.textContent = '📱 Send SMS';
+            }
         }
 
         // Utility functions
-        function showNotification(message, type = 'info') {
-            const notification = document.getElementById('notification');
-            const notificationText = document.getElementById('notificationText');
-            
-            notificationText.textContent = message;
-            notification.className = `notification ${type}`;
-            notification.classList.add('show');
+        function isValidPhone(phone) {
+            const e164Regex = /^\+[1-9]\d{1,14}$/;
+            return e164Regex.test(phone);
+        }
+
+        function showError(message) {
+            showStatus(message, 'error');
+        }
+
+        function showSuccess(message) {
+            showStatus(message, 'success');
+        }
+
+        function showStatus(message, type) {
+            const container = document.getElementById('statusContainer');
+            const div = document.createElement('div');
+            div.className = type;
+            div.textContent = message;
+            container.appendChild(div);
             
             setTimeout(() => {
-                notification.classList.remove('show');
-            }, 3000);
+                div.remove();
+            }, 5000);
         }
 
         function formatDuration(seconds) {
-            if (!seconds) return 'N/A';
+            if (!seconds) return '0:00';
             const mins = Math.floor(seconds / 60);
             const secs = seconds % 60;
             return `${mins}:${String(secs).padStart(2, '0')}`;
@@ -1369,76 +753,30 @@
             const now = new Date();
             const diffMs = now - date;
             const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
-            const diffDays = Math.floor(diffHours / 24);
             
             if (diffHours < 1) return 'Just now';
             if (diffHours < 24) return `${diffHours}h ago`;
-            if (diffDays < 7) return `${diffDays}d ago`;
+            if (diffHours < 48) return 'Yesterday';
             return date.toLocaleDateString();
         }
 
-        // Settings functions
-        function showHealth() {
-            showNotification('🏥 System is running smoothly and all services are operational', 'success');
-        }
-
-        function showGuide() {
-            showNotification('📚 Use the Voice Call feature for AI phone calls, SMS for text messages, and Activity to track history', 'info');
-        }
-
-        function showAbout() {
-            showNotification('ℹ️ Voicednut Bot v1.0 - AI-powered voice calling and SMS platform', 'info');
-        }
-
-        // Admin functions
-        function showUsers() {
-            if (userData.role === 'ADMIN' || userData.isAdmin) {
-                showNotification('👥 User management interface would open here in the full version', 'info');
-            } else {
-                showNotification('❌ Admin access required', 'error');
+        // Handle Telegram Web App events
+        if (tg.isVersionAtLeast && tg.isVersionAtLeast('6.0')) {
+            // Set theme colors
+            if (tg.themeParams) {
+                document.documentElement.style.setProperty('--tg-theme-bg-color', tg.themeParams.bg_color || '#ffffff');
+                document.documentElement.style.setProperty('--tg-theme-text-color', tg.themeParams.text_color || '#000000');
+                document.documentElement.style.setProperty('--tg-theme-button-color', tg.themeParams.button_color || '#007AFF');
+                document.documentElement.style.setProperty('--tg-theme-button-text-color', tg.themeParams.button_text_color || '#ffffff');
             }
         }
 
-        function showAnalytics() {
-            if (userData.role === 'ADMIN' || userData.isAdmin) {
-                showNotification('📈 Analytics dashboard would display detailed usage statistics here', 'info');
-            } else {
-                showNotification('❌ Admin access required', 'error');
-            }
-        }
-
-        function showLogs() {
-            if (userData.role === 'ADMIN' || userData.isAdmin) {
-                showNotification('📄 System logs and audit trail would be shown here', 'info');
-            } else {
-                showNotification('❌ Admin access required', 'error');
-            }
-        }
-
-        function showBilling() {
-            if (userData.role === 'ADMIN' || userData.isAdmin) {
-                showNotification('💳 Billing and usage costs would be displayed here', 'info');
-            } else {
-                showNotification('❌ Admin access required', 'error');
-            }
-        }
-
-        // Telegram WebApp event handlers
-        if (tg?.onEvent) {
-            tg.onEvent('backButtonClicked', () => {
-                goBack();
-            });
-
-            tg.onEvent('viewportChanged', () => {
-                // Handle viewport changes if needed
-            });
-        }
-
-        // Handle browser back button
-        window.addEventListener('popstate', (event) => {
-            if (pageHistory.length > 0) {
-                goBack();
-            }
+        // Debug information
+        console.log('Telegram WebApp initialized:', {
+            version: tg.version,
+            platform: tg.platform,
+            initData: initData.substring(0, 50) + '...',
+            user: user
         });
     </script>
 </body>
