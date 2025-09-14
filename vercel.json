@@ -1,38 +1,71 @@
 {
   "version": 2,
+  "name": "voicednut-miniapp",
   "builds": [
     {
-      "src": "bot/miniapp/server/webapp.js",
-      "use": "@vercel/node"
+      "src": "mini-app/server/webapp.js",
+      "use": "@vercel/node",
+      "config": {
+        "maxLambdaSize": "50mb"
+      }
     },
     {
-      "src": "bot/miniapp/public/**",
-      "use": "@vercel/static"
+      "src": "mini-app/package.json",
+      "use": "@vercel/static-build",
+      "config": {
+        "distDir": "mini-app/dist"
+      }
     }
   ],
   "routes": [
     {
-      "src": "/miniapp.html",
-      "dest": "bot/miniapp/public/miniapp.html"
-    },
-    {
-      "src": "/",
-      "dest": "bot/miniapp/server/webapp.js"
-    },
-    {
       "src": "/api/(.*)",
-      "dest": "bot/miniapp/server/webapp.js"
+      "dest": "mini-app/server/webapp.js"
     },
     {
       "src": "/debug",
-      "dest": "bot/miniapp/server/webapp.js"
+      "dest": "mini-app/server/webapp.js"
     },
     {
-      "src": "/public/(.*)",
-      "dest": "bot/miniapp/public/$1"
+      "src": "/miniapp.html",
+      "dest": "mini-app/server/webapp.js"
+    },
+    {
+      "src": "/ws",
+      "dest": "mini-app/server/webapp.js"
+    },
+    {
+      "src": "/assets/(.*)",
+      "dest": "mini-app/dist/assets/$1"
+    },
+    {
+      "src": "/(.*\\.(js|css|png|jpg|jpeg|gif|svg|ico|woff|woff2|ttf|eot))",
+      "dest": "mini-app/dist/$1"
+    },
+    {
+      "src": "/",
+      "dest": "mini-app/dist/index.html"
+    },
+    {
+      "src": "/(.*)",
+      "dest": "mini-app/dist/index.html"
     }
   ],
+  "functions": {
+    "mini-app/server/webapp.js": {
+      "maxDuration": 30
+    }
+  },
   "env": {
     "NODE_ENV": "production"
-  }
+  },
+  "build": {
+    "env": {
+      "NODE_ENV": "production"
+    }
+  },
+  "installCommand": "cd bot/mini-app && npm install",
+  "buildCommand": "cd bot/mini-app && npm run build",
+  "outputDirectory": "bot/mini-app/dist",
+  "framework": "vite"
 }

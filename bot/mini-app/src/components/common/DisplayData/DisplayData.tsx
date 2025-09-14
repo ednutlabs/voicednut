@@ -1,14 +1,10 @@
+// bot/mini-app/src/components/common/DisplayData/DisplayData.tsx
 import { isRGB } from '@telegram-apps/sdk-react';
 import { Cell, Checkbox, Section } from '@telegram-apps/telegram-ui';
 import type { FC, ReactNode } from 'react';
-
-import { RGB } from '@/components/RGB/RGB.tsx';
-import { Link } from '@/components/Link/Link.tsx';
-import { bem } from '@/css/bem.ts';
-
+import { RGB } from '@/components/RGB/RGB';
+import { Link } from '@/components/Link/Link';
 import './DisplayData.css';
-
-const [, e] = bem('display-data');
 
 export type DisplayDataRow =
   & { title: string }
@@ -46,13 +42,13 @@ export const DisplayData: FC<DisplayDataProps> = ({ header, rows }) => (
 
       return (
         <Cell
-          className={e('line')}
+          className="display-data__line"
           subhead={item.title}
           readOnly
           multiline={true}
           key={idx}
         >
-          <span className={e('line-value')}>
+          <span className="display-data__line-value">
             {valueNode}
           </span>
         </Cell>
