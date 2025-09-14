@@ -72,6 +72,24 @@ require('./commands/transcript')(bot);
 require('./commands/api')(bot);
 require('./commands/webapp')(bot);
 
+    // Handle web app data from Mini App
+bot.on('message:web_app_data', async (ctx) => {
+    try {
+        const user = await new Promise(r => getUser(ctx.from.id, r));
+        if (!user) {
+            return ctx.reply('❌ You are not authorized to use this bot.');
+        }
+
+        const webAppData = JSON.parse(ctx.message.web_app_data.data);
+        console.log('Received Mini App data from user', ctx.from.id, ':', webAppData);
+        
+        await handleMiniAppAction(ctx, webAppData, user);
+    } catch (error) {
+        console.error('Web App data error:', error);
+        await ctx.reply('❌ Error processing Mini App request. Please try again.');
+    }
+});
+
 // Start command handler
 bot.command('start', async (ctx) => {
     try {

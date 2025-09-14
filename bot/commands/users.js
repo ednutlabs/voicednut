@@ -4,7 +4,7 @@ module.exports = (bot) => {
     bot.command('users', async (ctx) => {
         try {
             // Check authorization first
-                        // Check if user is authorized and is admin
+            
             const user = await new Promise(r => getUser(ctx.from.id, r));
             if (!user) {
                 return ctx.reply('❌ You are not authorized to use this bot.');
