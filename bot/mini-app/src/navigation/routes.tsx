@@ -1,9 +1,9 @@
+// bot/mini-app/src/navigation/routes.tsx
 import type { ComponentType, JSX } from 'react';
-
 import { IndexPage } from '@/pages/IndexPage/IndexPage';
-import { InitDataPage } from '@/pages/InitDataPage.tsx';
-import { LaunchParamsPage } from '@/pages/LaunchParamsPage.tsx';
-import { ThemeParamsPage } from '@/pages/ThemeParamsPage.tsx';
+import { InitDataPage } from '@/pages/InitDataPage';
+import { LaunchParamsPage } from '@/pages/LaunchParamsPage';
+import { ThemeParamsPage } from '@/pages/ThemeParamsPage';
 import { TONConnectPage } from '@/pages/TONConnectPage/TONConnectPage';
 
 interface Route {

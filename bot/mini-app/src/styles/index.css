@@ -1,6 +1,4 @@
-/* Main style entry point */
+/* bot/mini-app/src/styles/index.css */
 @import './variables.css';
 @import './global.css';
 @import './theme.css';
-
-/* Any additional styles or overrides can be added here */

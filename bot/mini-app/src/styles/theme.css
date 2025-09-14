@@ -1,47 +1,30 @@
-/* Theme-specific styles that extend or override global styles */
-
-/* Light theme overrides */
+/* bot/mini-app/src/styles/theme.css */
 [data-theme="light"] {
-  --shadow-color: rgba(0, 0, 0, 0.1);
-  --card-bg: #ffffff;
+    --shadow-color: rgba(0, 0, 0, 0.1);
+    --card-bg: #ffffff;
 }
 
-/* Dark theme overrides */
 [data-theme="dark"] {
-  --shadow-color: rgba(255, 255, 255, 0.1);
-  --card-bg: #2c2c2c;
+    --shadow-color: rgba(255, 255, 255, 0.1);
+    --card-bg: #2c2c2c;
 }
 
-/* Common components */
 .card {
-  background-color: var(--card-bg);
-  border-radius: var(--border-radius-lg);
-  padding: var(--spacing-lg);
-  margin-bottom: var(--spacing-md);
-  box-shadow: 0 2px 8px var(--shadow-color);
+    background-color: var(--card-bg);
+    border-radius: var(--border-radius-lg);
+    padding: var(--spacing-lg);
+    margin-bottom: var(--spacing-md);
+    box-shadow: 0 2px 8px var(--shadow-color);
 }
 
 .header {
-  padding: var(--spacing-md);
-  border-bottom: 1px solid var(--tg-theme-hint-color);
-  margin-bottom: var(--spacing-lg);
+    padding: var(--spacing-md);
+    border-bottom: 1px solid var(--tg-theme-hint-color);
+    margin-bottom: var(--spacing-lg);
 }
 
 .footer {
-  padding: var(--spacing-md);
-  border-top: 1px solid var(--tg-theme-hint-color);
-  margin-top: var(--spacing-lg);
-}
-
-/* Feature-specific themes */
-.call-monitor {
-  --call-active: var(--color-success);
-  --call-ended: var(--color-error);
-  --call-waiting: var(--color-warning);
-}
-
-.analytics-dashboard {
-  --chart-primary: var(--tg-theme-button-color);
-  --chart-secondary: var(--tg-theme-link-color);
-  --chart-tertiary: var(--color-info);
+    padding: var(--spacing-md);
+    border-top: 1px solid var(--tg-theme-hint-color);
+    margin-top: var(--spacing-lg);
 }
