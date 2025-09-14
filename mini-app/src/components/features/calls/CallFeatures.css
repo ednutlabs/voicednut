@@ -1,0 +1,241 @@
+.call-monitor {
+  padding: 20px;
+}
+
+.call-info {
+  background: var(--tg-theme-secondary-bg-color);
+  padding: 16px;
+  border-radius: 8px;
+  margin: 10px 0;
+}
+
+.call-history {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 10px;
+}
+
+.call-history-item {
+  background: var(--tg-theme-bg-color);
+  padding: 12px;
+  border-radius: 8px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+.call-history-item p {
+  margin: 4px 0;
+  color: var(--tg-theme-text-color);
+}
+
+.call-initiator {
+  padding: 20px;
+}
+
+.input-group {
+  margin-bottom: 16px;
+}
+
+.input-group label {
+  display: block;
+  margin-bottom: 8px;
+  color: var(--tg-theme-text-color);
+}
+
+.input-group input {
+  width: 100%;
+  padding: 8px 12px;
+  border: 1px solid var(--tg-theme-link-color);
+  border-radius: 4px;
+  background: var(--tg-theme-bg-color);
+  color: var(--tg-theme-text-color);
+}
+
+.input-group input:focus {
+  outline: none;
+  border-color: var(--tg-theme-button-color);
+}
+
+.call-button {
+  width: 100%;
+  padding: 12px;
+  background: var(--tg-theme-button-color);
+  color: var(--tg-theme-button-text-color);
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-weight: 500;
+  transition: opacity 0.2s;
+}
+
+.call-button:disabled {
+  opacity: 0.7;
+  cursor: not-allowed;
+}
+
+.call-button.loading {
+  opacity: 0.8;
+}
+
+.call-features {
+  padding: 20px;
+  background: var(--tg-theme-secondary-bg-color);
+  border-radius: 12px;
+  margin: 16px;
+}
+
+.call-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 24px;
+}
+
+.call-header h2 {
+  color: var(--tg-theme-text-color);
+  margin: 0;
+}
+
+.credits-display {
+  background: var(--tg-theme-button-color);
+  color: var(--tg-theme-button-text-color);
+  padding: 8px 16px;
+  border-radius: 20px;
+  font-size: 14px;
+}
+
+.connection-status {
+  margin-bottom: 16px;
+  padding: 12px;
+  background: var(--tg-theme-bg-color);
+  border-radius: 8px;
+  font-size: 14px;
+}
+
+.error-message {
+  color: var(--tg-theme-destructive-text-color);
+  margin-top: 8px;
+  font-size: 12px;
+}
+
+.call-form {
+  background: var(--tg-theme-bg-color);
+  padding: 20px;
+  border-radius: 12px;
+  margin-bottom: 24px;
+}
+
+.form-group {
+  margin-bottom: 16px;
+}
+
+.form-group label {
+  display: block;
+  color: var(--tg-theme-text-color);
+  margin-bottom: 8px;
+  font-size: 14px;
+}
+
+.form-group input,
+.form-group textarea,
+.form-group select {
+  width: 100%;
+  padding: 12px;
+  border: 1px solid var(--tg-theme-hint-color);
+  background: var(--tg-theme-secondary-bg-color);
+  color: var(--tg-theme-text-color);
+  border-radius: 8px;
+  font-size: 14px;
+}
+
+.form-group textarea {
+  min-height: 80px;
+  resize: vertical;
+}
+
+.advanced-toggle {
+  background: none;
+  border: none;
+  color: var(--tg-theme-hint-color);
+  padding: 8px 0;
+  cursor: pointer;
+  font-size: 14px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+
+.advanced-settings {
+  background: var(--tg-theme-secondary-bg-color);
+  padding: 16px;
+  border-radius: 8px;
+  margin-bottom: 20px;
+}
+
+.call-controls {
+  display: flex;
+  justify-content: center;
+  gap: 12px;
+}
+
+.call-button {
+  background: var(--tg-theme-button-color);
+  color: var(--tg-theme-button-text-color);
+  border: none;
+  border-radius: 8px;
+  padding: 12px 24px;
+  font-size: 16px;
+  cursor: pointer;
+  transition: opacity 0.2s ease;
+  width: 100%;
+  max-width: 300px;
+}
+
+.call-button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.call-button:not(:disabled):hover {
+  opacity: 0.9;
+}
+
+.call-button:not(:disabled):active {
+  opacity: 0.8;
+}
+
+.admin-tools {
+  background: var(--tg-theme-bg-color);
+  padding: 20px;
+  border-radius: 12px;
+  margin-top: 24px;
+}
+
+.admin-tools h3 {
+  color: var(--tg-theme-text-color);
+  margin: 0 0 16px 0;
+  font-size: 18px;
+}
+
+.admin-buttons {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 12px;
+}
+
+.admin-buttons button {
+  background: var(--tg-theme-secondary-bg-color);
+  color: var(--tg-theme-text-color);
+  border: none;
+  border-radius: 8px;
+  padding: 12px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  font-size: 14px;
+}
+
+.admin-buttons button:hover {
+  background: var(--tg-theme-button-color);
+  color: var(--tg-theme-button-text-color);
+}

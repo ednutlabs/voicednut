@@ -1,0 +1,35 @@
+@keyframes skeleton-loading {
+  0% {
+    background-position: 200% 0;
+  }
+  100% {
+    background-position: -200% 0;
+  }
+}
+
+.skeleton-loader {
+  background: linear-gradient(
+    90deg,
+    var(--tg-theme-secondary-bg-color) 25%,
+    var(--tg-theme-bg-color) 37%,
+    var(--tg-theme-secondary-bg-color) 63%
+  );
+  background-size: 400% 100%;
+  animation: skeleton-loading 1.4s ease infinite;
+}
+
+.skeleton-text {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.skeleton-text-line {
+  height: 1rem;
+  margin-bottom: 8px;
+}
+
+.skeleton-text-line:last-child {
+  margin-bottom: 0;
+  width: 80%;
+}

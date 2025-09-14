@@ -2,9 +2,13 @@ const express = require('express');
 const cors = require('cors');
 const path = require('path');
 const crypto = require('crypto');
+const { WebSocketServer } = require('ws');
+const http = require('http');
 require('dotenv').config();
 
 const app = express();
+const server = http.createServer(app);
+const wss = new WebSocketServer({ server });
 
 // Enhanced CORS configuration for Telegram Mini Apps
 const corsOrigins = [

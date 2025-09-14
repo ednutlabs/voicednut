@@ -1,0 +1,120 @@
+.admin-dashboard {
+  padding: 20px;
+  background: var(--tg-theme-secondary-bg-color);
+  min-height: 100vh;
+}
+
+.admin-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 24px;
+}
+
+.admin-header h1 {
+  color: var(--tg-theme-text-color);
+  font-size: 24px;
+  margin: 0;
+}
+
+.admin-info {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  color: var(--tg-theme-text-color);
+}
+
+.role-badge {
+  background: var(--tg-theme-button-color);
+  color: var(--tg-theme-button-text-color);
+  padding: 4px 12px;
+  border-radius: 12px;
+  font-size: 12px;
+}
+
+.admin-nav {
+  display: flex;
+  gap: 12px;
+  margin-bottom: 24px;
+  padding: 12px;
+  background: var(--tg-theme-bg-color);
+  border-radius: 12px;
+  overflow-x: auto;
+}
+
+.nav-button {
+  background: none;
+  border: none;
+  padding: 8px 16px;
+  color: var(--tg-theme-hint-color);
+  cursor: pointer;
+  border-radius: 8px;
+  white-space: nowrap;
+  transition: all 0.2s ease;
+}
+
+.nav-button:hover {
+  background: var(--tg-theme-secondary-bg-color);
+  color: var(--tg-theme-text-color);
+}
+
+.nav-button.active {
+  background: var(--tg-theme-button-color);
+  color: var(--tg-theme-button-text-color);
+}
+
+.admin-content {
+  background: var(--tg-theme-bg-color);
+  border-radius: 12px;
+  padding: 20px;
+  margin-bottom: 24px;
+  min-height: 400px;
+}
+
+.quick-stats {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 16px;
+  margin-top: 24px;
+}
+
+.stat-card {
+  background: var(--tg-theme-bg-color);
+  padding: 16px;
+  border-radius: 12px;
+}
+
+.stat-card h3 {
+  color: var(--tg-theme-hint-color);
+  font-size: 14px;
+  margin: 0 0 8px 0;
+}
+
+.stat-value {
+  color: var(--tg-theme-text-color);
+  font-size: 24px;
+  font-weight: bold;
+  margin-bottom: 8px;
+}
+
+.stat-trend {
+  font-size: 12px;
+  padding: 4px 8px;
+  border-radius: 4px;
+  display: inline-block;
+}
+
+.stat-trend.positive {
+  background: rgba(39, 174, 96, 0.1);
+  color: #27ae60;
+}
+
+.stat-trend.negative {
+  background: rgba(235, 87, 87, 0.1);
+  color: #eb5757;
+}
+
+.stat-trend.neutral {
+  background: rgba(130, 130, 130, 0.1);
+  color: #828282;
+}

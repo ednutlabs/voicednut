@@ -1,0 +1,110 @@
+.user-settings {
+  padding: 20px;
+  background: var(--tg-theme-secondary-bg-color);
+  border-radius: 12px;
+  margin: 16px;
+}
+
+.settings-title {
+  color: var(--tg-theme-text-color);
+  font-size: 24px;
+  margin-bottom: 24px;
+}
+
+.settings-section {
+  margin-bottom: 32px;
+}
+
+.settings-section h3 {
+  color: var(--tg-theme-text-color);
+  font-size: 18px;
+  margin-bottom: 16px;
+}
+
+.setting-item {
+  margin-bottom: 20px;
+}
+
+.setting-item label {
+  display: block;
+  color: var(--tg-theme-text-color);
+  margin-bottom: 8px;
+  font-size: 14px;
+}
+
+.setting-item input[type="text"],
+.setting-item textarea,
+.setting-item select {
+  width: 100%;
+  padding: 12px;
+  border: 1px solid var(--tg-theme-hint-color);
+  background: var(--tg-theme-bg-color);
+  color: var(--tg-theme-text-color);
+  border-radius: 8px;
+  font-size: 14px;
+}
+
+.setting-item textarea {
+  resize: vertical;
+  min-height: 80px;
+}
+
+.setting-item select {
+  appearance: none;
+  background-image: url("data:image/svg+xml;charset=UTF-8,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3e%3cpolyline points='6 9 12 15 18 9'%3e%3c/polyline%3e%3c/svg%3e");
+  background-repeat: no-repeat;
+  background-position: right 12px center;
+  background-size: 16px;
+  padding-right: 40px;
+}
+
+/* Toggle Switch */
+.toggle-label {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  cursor: pointer;
+}
+
+.toggle-label input[type="checkbox"] {
+  display: none;
+}
+
+.toggle-switch {
+  position: relative;
+  display: inline-block;
+  width: 48px;
+  height: 24px;
+  background: var(--tg-theme-hint-color);
+  border-radius: 12px;
+  transition: all 0.3s;
+}
+
+.toggle-switch:before {
+  content: '';
+  position: absolute;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: white;
+  top: 2px;
+  left: 2px;
+  transition: all 0.3s;
+}
+
+.toggle-label input:checked + .toggle-switch {
+  background: var(--tg-theme-button-color);
+}
+
+.toggle-label input:checked + .toggle-switch:before {
+  transform: translateX(24px);
+}
+
+.settings-info {
+  text-align: center;
+  color: var(--tg-theme-hint-color);
+  font-size: 12px;
+  margin-top: 32px;
+  padding-top: 16px;
+  border-top: 1px solid var(--tg-theme-hint-color);
+}

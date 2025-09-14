@@ -1,15 +1,16 @@
-# Voice Call Bot System 🤖📞
+# VoicedNut - AI Voice Call System 🤖📞
 
-[![Node.js](https://img.shields.io/badge/Node.js-16%2B-green.svg)](https://nodejs.org/)
+[![Node.js](https://img.shields.io/badge/Node.js-20%2B-green.svg)](https://nodejs.org/)
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 [![Telegram](https://img.shields.io/badge/Telegram-Bot-blue.svg)](https://core.telegram.org/bots)
+[![React](https://img.shields.io/badge/React-18-blue.svg)](https://reactjs.org/)
 [![Twilio](https://img.shields.io/badge/Twilio-API-red.svg)](https://www.twilio.com/)
 
-A comprehensive Telegram bot system for making AI-powered voice calls using Twilio, OpenRouter APIs, and real-time transcription with Deepgram.
+A comprehensive AI-powered voice call system with a Telegram bot interface and a modern React mini-app. Make intelligent voice calls using Twilio, leverage AI through OpenRouter APIs, and get real-time transcription with Deepgram.
 
 ## 🌟 Features
 
-### 🤖 Bot Features
+### 🤖 Core Features
 
 - AI-powered voice conversations with customizable agents
 - Outbound call management and monitoring
@@ -21,16 +22,24 @@ A comprehensive Telegram bot system for making AI-powered voice calls using Twil
 - Real-time notifications via Telegram webhooks
 - Custom AI prompts and agent personalities
 
-### 🌐 API Features
+### 📱 Mini App Features
 
-- RESTful API for call management
-- Real-time call status and progress tracking
-- WebSocket connections for live audio streaming
-- Persistent data storage with SQLite
-- Secure webhook notifications
-- Comprehensive health monitoring
-- Text-to-speech with Deepgram
-- Speech-to-text with real-time processing
+- Modern React-based Telegram Mini App
+- Real-time call monitoring
+- Advanced call settings
+- Role-based UI components
+- WebSocket integration
+- Responsive Telegram theme integration
+- Admin dashboard with system controls
+
+### 🎯 Admin Features
+
+- User management system
+- System health monitoring
+- Call analytics dashboard
+- Real-time status updates
+- Advanced configuration controls
+- Deployment monitoring
 
 ## 🏗️ System Architecture
 
@@ -38,11 +47,12 @@ A comprehensive Telegram bot system for making AI-powered voice calls using Twil
 graph TB
     A[Telegram Bot<br/>Grammy.js] --> B[API Server<br/>Express.js]
     B --> C[Twilio API<br/>Voice Calls]
-    A --> D[SQLite DB<br/>User Auth]
-    B --> E[Database<br/>Call Data]
+    D[Mini App<br/>React] --> B
+    D --> E[WebSocket<br/>Real-time]
     B --> F[AI Services<br/>OpenRouter]
     B --> G[Deepgram<br/>Transcription]
-    
+    B --> H[SQLite DB<br/>Data Storage]
+
     style A fill:#0088cc
     style B fill:#ff6b35
     style C fill:#f25c54
@@ -63,13 +73,14 @@ graph TB
 ### Installation
 
 1. **Clone the repository**
-   
+
    ```bash
    git clone https://github.com/ednutlabs/voicednut.git
    cd voicednut
    ```
+
 1. **Set up API Server**
-   
+
    ```bash
    cd api
    npm install
@@ -77,8 +88,9 @@ graph TB
    # Edit .env with your credentials
    npm start
    ```
+
 1. **Set up Bot**
-   
+
    ```bash
    cd ../bot
    npm install
@@ -86,7 +98,9 @@ graph TB
    # Edit .env with your credentials
    npm start
    ```
+
 1. **Start using the bot**
+
 - Message your bot on Telegram
 - Use `/start` to begin
 - Use `/call` to make your first AI call
@@ -302,9 +316,11 @@ CMD ["npm", "start"]
 1. **Start the bot**: Send `/start` to your bot
 1. **Initiate a call**: Use `/call` command
 1. **Enter details**:
+
 - Phone number: `+1234567890`
 - AI prompt: `"You are a friendly customer service agent"`
 - First message: `"Hello! How can I help you today?"`
+
 1. **Monitor progress**: Receive real-time notifications
 1. **Get transcript**: Use `/transcript <call_sid>` after the call
 
@@ -417,7 +433,7 @@ This project is licensed under the MIT License - see the <LICENSE> file for deta
 - 🐛 **Bug Reports**: Welcome and addressed promptly
 - 🚀 **Feature Requests**: Open to new ideas and suggestions
 
------
+---
 
 <div align="center">
 

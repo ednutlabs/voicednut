@@ -1,0 +1,127 @@
+.navigation {
+  width: 250px;
+  background: var(--tg-theme-secondary-bg-color);
+  display: flex;
+  flex-direction: column;
+  padding: 20px;
+}
+
+.nav-header {
+  margin-bottom: 32px;
+}
+
+.app-logo {
+  font-size: 24px;
+  font-weight: bold;
+  color: var(--tg-theme-text-color);
+  margin-bottom: 12px;
+}
+
+.user-info {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.username {
+  color: var(--tg-theme-text-color);
+  font-weight: 500;
+}
+
+.role-badge {
+  display: inline-block;
+  padding: 4px 8px;
+  border-radius: 12px;
+  font-size: 12px;
+  text-align: center;
+  background: var(--tg-theme-button-color);
+  color: var(--tg-theme-button-text-color);
+}
+
+.role-badge.admin {
+  background: #eb5757;
+}
+
+.nav-links {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.nav-link {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px;
+  color: var(--tg-theme-hint-color);
+  text-decoration: none;
+  border-radius: 8px;
+  transition: all 0.2s ease;
+}
+
+.nav-link:hover {
+  background: var(--tg-theme-bg-color);
+  color: var(--tg-theme-text-color);
+}
+
+.nav-link.active {
+  background: var(--tg-theme-button-color);
+  color: var(--tg-theme-button-text-color);
+}
+
+.nav-icon {
+  font-size: 18px;
+}
+
+.nav-label {
+  font-size: 14px;
+}
+
+.nav-footer {
+  margin-top: auto;
+  padding-top: 20px;
+}
+
+.logout-button {
+  width: 100%;
+  padding: 12px;
+  background: none;
+  border: 1px solid var(--tg-theme-button-color);
+  color: var(--tg-theme-button-color);
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.logout-button:hover {
+  background: var(--tg-theme-button-color);
+  color: var(--tg-theme-button-text-color);
+}
+
+@media (max-width: 768px) {
+  .navigation {
+    width: 80px;
+    padding: 12px;
+  }
+
+  .app-logo,
+  .user-info,
+  .nav-label {
+    display: none;
+  }
+
+  .nav-link {
+    justify-content: center;
+    padding: 12px;
+  }
+
+  .nav-icon {
+    font-size: 24px;
+  }
+
+  .logout-button {
+    padding: 12px;
+    font-size: 20px;
+  }
+}
