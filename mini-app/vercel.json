@@ -6,9 +6,9 @@
   "installCommand": "npm install",
   "outputDirectory": "dist",
   "env": {
-    "VITE_API_URL": "@vite_api_url",
-    "VITE_WS_URL": "@vite_ws_url",
-    "VITE_BOT_NAME": "@vite_bot_name"
+    "VITE_API_URL": "https://warthog-awake-morally.ngrok-free.app",
+    "VITE_WS_URL": "wss://warthog-awake-morally.ngrok-free.app",
+    "VITE_BOT_NAME": "VOICEDNUT"
   },
   "github": {
     "silent": true
